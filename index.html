@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TripSync - Plan Trips Together</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Home Screen -->
+        <div id="screen-home" class="screen active">
+            <div class="container">
+                <div class="logo">
+                    <h1>✈️ TripSync</h1>
+                    <p class="tagline">Plan trips with friends, powered by AI</p>
+                </div>
+
+                <div class="actions">
+                    <button class="btn btn-primary" onclick="app.showScreen('create-trip')">
+                        Create a Trip
+                    </button>
+                    <button class="btn btn-secondary" onclick="app.showJoinDialog()">
+                        Join a Trip
+                    </button>
+                </div>
+
+                <div id="trip-list" class="trip-list">
+                    <h3>Your Trips</h3>
+                    <div id="trips-container"></div>
+                </div>
+
+                <div class="api-key-section">
+                    <button class="btn btn-text" onclick="app.showApiKeyDialog()">
+                        ⚙️ Set Claude API Key
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Create Trip Screen -->
+        <div id="screen-create-trip" class="screen">
+            <div class="container">
+                <div class="header">
+                    <button class="btn-back" onclick="app.showScreen('home')">←</button>
+                    <h2>Create a Trip</h2>
+                </div>
+
+                <form id="create-trip-form" onsubmit="app.handleCreateTrip(event)">
+                    <div class="form-group">
+                        <label for="trip-name">Trip Name</label>
+                        <input type="text" id="trip-name" placeholder="Summer Adventure 2026" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Participants</label>
+                        <div id="participants-list" class="participants-list">
+                            <div class="participant-input">
+                                <input type="text" placeholder="Name" class="participant-name" required>
+                                <button type="button" class="btn-remove" onclick="app.removeParticipant(this)" style="visibility: hidden">×</button>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-text" onclick="app.addParticipant()">+ Add participant</button>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-full">Continue</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Select Identity Screen -->
+        <div id="screen-select-identity" class="screen">
+            <div class="container">
+                <div class="header">
+                    <button class="btn-back" onclick="app.goBack()">←</button>
+                    <h2>Who are you?</h2>
+                </div>
+
+                <p class="subtitle">Select your name from the list</p>
+
+                <div id="identity-list" class="identity-list"></div>
+            </div>
+        </div>
+
+        <!-- Availability Calendar Screen -->
+        <div id="screen-availability" class="screen">
+            <div class="container">
+                <div class="header">
+                    <button class="btn-back" onclick="app.goBack()">←</button>
+                    <h2>Your Availability</h2>
+                </div>
+
+                <p class="subtitle">Tap dates when you are <strong>NOT available</strong></p>
+
+                <div class="calendar-nav">
+                    <button class="btn-nav" onclick="app.prevMonth()">‹</button>
+                    <span id="calendar-month-year"></span>
+                    <button class="btn-nav" onclick="app.nextMonth()">›</button>
+                </div>
+
+                <div id="calendar" class="calendar"></div>
+
+                <div class="selected-dates">
+                    <p>Unavailable dates: <span id="unavailable-count">0</span></p>
+                </div>
+
+                <button class="btn btn-primary btn-full" onclick="app.confirmAvailability()">Confirm</button>
+            </div>
+        </div>
+
+        <!-- Destinations Screen (Owner only) -->
+        <div id="screen-destinations" class="screen">
+            <div class="container">
+                <div class="header">
+                    <button class="btn-back" onclick="app.goBack()">←</button>
+                    <h2>Destination Options</h2>
+                </div>
+
+                <p class="subtitle">Add destination options for voting. Each option can include multiple countries.</p>
+
+                <div id="destinations-list" class="destinations-list"></div>
+
+                <button class="btn btn-text" onclick="app.addDestinationOption()">+ Add option</button>
+
+                <button class="btn btn-primary btn-full" onclick="app.confirmDestinations()">Continue</button>
+            </div>
+        </div>
+
+        <!-- Waiting Screen -->
+        <div id="screen-waiting" class="screen">
+            <div class="container center-content">
+                <div class="waiting-icon">⏳</div>
+                <h2>Waiting for everyone</h2>
+                <p class="subtitle">Share this link with your friends:</p>
+
+                <div class="share-link">
+                    <input type="text" id="share-url" readonly>
+                    <button class="btn btn-secondary" onclick="app.copyShareLink()">Copy</button>
+                </div>
+
+                <div id="participants-status" class="participants-status"></div>
+
+                <button id="btn-generate" class="btn btn-primary btn-full" onclick="app.generateRecommendations()" style="display: none">
+                    Generate AI Recommendations
+                </button>
+            </div>
+        </div>
+
+        <!-- Results Screen -->
+        <div id="screen-results" class="screen">
+            <div class="container">
+                <div class="header">
+                    <button class="btn-back" onclick="app.showScreen('waiting')">←</button>
+                    <h2>AI Recommendations</h2>
+                </div>
+
+                <div id="results-container" class="results-container"></div>
+
+                <button class="btn btn-secondary btn-full" onclick="app.regenerate()">
+                    🔄 Regenerate
+                </button>
+            </div>
+        </div>
+
+        <!-- Loading Overlay -->
+        <div id="loading-overlay" class="loading-overlay">
+            <div class="spinner"></div>
+            <p id="loading-text">Analyzing your trip...</p>
+        </div>
+
+        <!-- API Key Dialog -->
+        <div id="api-key-dialog" class="dialog-overlay">
+            <div class="dialog">
+                <h3>Claude API Key</h3>
+                <p>Enter your Anthropic API key. It will be stored locally in your browser.</p>
+                <input type="password" id="api-key-input" placeholder="sk-ant-...">
+                <div class="dialog-actions">
+                    <button class="btn btn-text" onclick="app.closeApiKeyDialog()">Cancel</button>
+                    <button class="btn btn-primary" onclick="app.saveApiKey()">Save</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Join Dialog -->
+        <div id="join-dialog" class="dialog-overlay">
+            <div class="dialog">
+                <h3>Join a Trip</h3>
+                <p>Paste the trip link shared with you:</p>
+                <input type="text" id="join-link-input" placeholder="https://...">
+                <div class="dialog-actions">
+                    <button class="btn btn-text" onclick="app.closeJoinDialog()">Cancel</button>
+                    <button class="btn btn-primary" onclick="app.joinFromLink()">Join</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="state.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
