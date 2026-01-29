@@ -21,6 +21,7 @@ const app = {
             this.currentTrip = tripFromUrl;
             this.isJoining = true;
             this.showScreen('select-identity');
+            this.renderIdentityList();
         }
 
         // Load trip history
@@ -84,8 +85,8 @@ const app = {
             .map(input => input.value.trim())
             .filter(p => p.length > 0);
 
-        if (participants.length < 2) {
-            alert('Please add at least 2 participants');
+        if (participants.length < 1) {
+            alert('Please add at least 1 participant');
             return;
         }
 
@@ -539,12 +540,12 @@ const app = {
         }
 
         container.innerHTML = history.map(trip => `
-            <div class="trip-item" onclick="app.loadTrip('${trip.id}')">
-                <div>
+            <div class="trip-item">
+                <div onclick="app.loadTrip('${trip.id}')" style="flex: 1; cursor: pointer;">
                     <div class="trip-item-name">${trip.name}</div>
-                    <div class="trip-item-meta">${trip.participants.length} participants</div>
+                    <div class="trip-item-meta">${trip.participants.length} participant${trip.participants.length > 1 ? 's' : ''}</div>
                 </div>
-                <span>→</span>
+                <button class="btn-delete-trip" onclick="event.stopPropagation(); app.deleteTrip('${trip.id}')" title="Delete trip">×</button>
             </div>
         `).join('');
     },
@@ -563,6 +564,18 @@ const app = {
             // Go to waiting screen to see status / continue
             TripState.updateUrl(trip);
             this.showScreen('waiting');
+        }
+    },
+
+    /**
+     * Delete a trip from history
+     */
+    deleteTrip(tripId) {
+        if (confirm('Are you sure you want to delete this trip?')) {
+            const history = TripState.getHistory();
+            const filtered = history.filter(t => t.id !== tripId);
+            localStorage.setItem('tripsync_history', JSON.stringify(filtered));
+            this.renderTripHistory();
         }
     },
 
