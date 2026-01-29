@@ -90,7 +90,8 @@
                     <h2>Your Availability</h2>
                 </div>
 
-                <p class="subtitle">Tap dates when you are <strong>NOT available</strong></p>
+                <p class="subtitle">Select dates when you <strong>ARE available</strong></p>
+                <p class="hint">Tap start date, then end date to select a range. Double-tap for a single day.</p>
 
                 <div class="calendar-nav">
                     <button class="btn-nav" onclick="app.prevMonth()">‹</button>
@@ -100,9 +101,7 @@
 
                 <div id="calendar" class="calendar"></div>
 
-                <div class="selected-dates">
-                    <p>Unavailable dates: <span id="unavailable-count">0</span></p>
-                </div>
+                <div id="ranges-recap" class="ranges-recap"></div>
 
                 <button class="btn btn-primary btn-full" onclick="app.confirmAvailability()">Confirm</button>
             </div>

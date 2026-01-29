@@ -71,7 +71,7 @@ const TripState = {
             name: name,
             participants: participants.map(p => ({
                 name: p,
-                unavailableDates: [],
+                availableRanges: [],
                 completed: false
             })),
             destinations: [],

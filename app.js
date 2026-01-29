@@ -7,7 +7,10 @@ const app = {
     currentTrip: null,
     currentScreen: 'home',
     calendarDate: new Date(),
-    selectedUnavailableDates: new Set(),
+    selectedRanges: [],
+    rangeSelectionStart: null,
+    lastTapTime: 0,
+    lastTapDate: null,
     screenHistory: [],
     isJoining: false,
 
@@ -152,13 +155,14 @@ const app = {
     selectIdentity(name) {
         this.currentTrip.currentUser = name;
 
-        // Load any previously selected dates for this user
+        // Load any previously selected ranges for this user
         const participant = TripState.getParticipant(this.currentTrip, name);
-        if (participant && participant.unavailableDates) {
-            this.selectedUnavailableDates = new Set(participant.unavailableDates);
+        if (participant && participant.availableRanges) {
+            this.selectedRanges = [...participant.availableRanges];
         } else {
-            this.selectedUnavailableDates = new Set();
+            this.selectedRanges = [];
         }
+        this.rangeSelectionStart = null;
 
         this.showScreen('availability');
     },
@@ -202,15 +206,17 @@ const app = {
             const dateStr = this.formatDate(year, month, day);
             const date = new Date(year, month, day);
             const isToday = date.getTime() === today.getTime();
-            const isUnavailable = this.selectedUnavailableDates.has(dateStr);
+            const isAvailable = this.isDateInRanges(dateStr);
+            const isRangeStart = this.rangeSelectionStart === dateStr;
             const isPast = date < today;
 
             let classes = 'calendar-day';
             if (isToday) classes += ' today';
-            if (isUnavailable) classes += ' unavailable';
+            if (isAvailable) classes += ' available';
+            if (isRangeStart) classes += ' range-start';
             if (isPast) classes += ' past';
 
-            html += `<div class="${classes}" data-date="${dateStr}" onclick="app.toggleDate('${dateStr}')">${day}</div>`;
+            html += `<div class="${classes}" data-date="${dateStr}" onclick="app.handleDateClick('${dateStr}')">${day}</div>`;
         }
 
         // Next month days
@@ -222,7 +228,7 @@ const app = {
         }
 
         calendar.innerHTML = html;
-        this.updateUnavailableCount();
+        this.renderRangesRecap();
     },
 
     /**
@@ -235,32 +241,122 @@ const app = {
     },
 
     /**
-     * Toggle date availability
+     * Check if a date is within any selected range
      */
-    toggleDate(dateStr) {
-        if (this.selectedUnavailableDates.has(dateStr)) {
-            this.selectedUnavailableDates.delete(dateStr);
-        } else {
-            this.selectedUnavailableDates.add(dateStr);
-        }
-
-        // Update UI
-        const dayEl = document.querySelector(`[data-date="${dateStr}"]`);
-        if (dayEl) {
-            dayEl.classList.toggle('unavailable');
-        }
-
-        this.updateUnavailableCount();
+    isDateInRanges(dateStr) {
+        const date = new Date(dateStr);
+        return this.selectedRanges.some(range => {
+            const start = new Date(range.start);
+            const end = new Date(range.end);
+            return date >= start && date <= end;
+        });
     },
 
     /**
-     * Update unavailable count display
+     * Handle date click for range selection
      */
-    updateUnavailableCount() {
-        const count = document.getElementById('unavailable-count');
-        if (count) {
-            count.textContent = this.selectedUnavailableDates.size;
+    handleDateClick(dateStr) {
+        const now = Date.now();
+        const isDoubleTap = (now - this.lastTapTime < 400) && (this.lastTapDate === dateStr);
+        this.lastTapTime = now;
+        this.lastTapDate = dateStr;
+
+        // If date is already in a range, remove that range
+        if (this.isDateInRanges(dateStr)) {
+            this.removeRangeContaining(dateStr);
+            this.rangeSelectionStart = null;
+            this.renderCalendar();
+            return;
         }
+
+        // Double tap = single day selection
+        if (isDoubleTap) {
+            this.selectedRanges.push({ start: dateStr, end: dateStr });
+            this.rangeSelectionStart = null;
+            this.renderCalendar();
+            return;
+        }
+
+        // First tap = set range start
+        if (!this.rangeSelectionStart) {
+            this.rangeSelectionStart = dateStr;
+            this.renderCalendar();
+            return;
+        }
+
+        // Second tap = complete the range
+        let start = this.rangeSelectionStart;
+        let end = dateStr;
+
+        // Ensure start is before end
+        if (new Date(start) > new Date(end)) {
+            [start, end] = [end, start];
+        }
+
+        this.selectedRanges.push({ start, end });
+        this.rangeSelectionStart = null;
+        this.renderCalendar();
+    },
+
+    /**
+     * Remove a range containing a specific date
+     */
+    removeRangeContaining(dateStr) {
+        const date = new Date(dateStr);
+        this.selectedRanges = this.selectedRanges.filter(range => {
+            const start = new Date(range.start);
+            const end = new Date(range.end);
+            return !(date >= start && date <= end);
+        });
+    },
+
+    /**
+     * Remove a specific range by index
+     */
+    removeRange(index) {
+        this.selectedRanges.splice(index, 1);
+        this.renderCalendar();
+    },
+
+    /**
+     * Render the ranges recap below calendar
+     */
+    renderRangesRecap() {
+        const container = document.getElementById('ranges-recap');
+        if (!container) return;
+
+        if (this.selectedRanges.length === 0) {
+            container.innerHTML = '<div class="ranges-empty">No dates selected yet. Tap a start date, then an end date.</div>';
+            return;
+        }
+
+        // Sort ranges by start date
+        const sorted = [...this.selectedRanges].sort((a, b) =>
+            new Date(a.start) - new Date(b.start)
+        );
+
+        container.innerHTML = sorted.map((range, idx) => {
+            const start = new Date(range.start);
+            const end = new Date(range.end);
+            const days = Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1;
+            const options = { month: 'short', day: 'numeric' };
+
+            const startStr = start.toLocaleDateString('en-US', options);
+            const endStr = end.toLocaleDateString('en-US', options);
+            const dateDisplay = range.start === range.end
+                ? startStr
+                : `${startStr} → ${endStr}`;
+
+            return `
+                <div class="range-item">
+                    <div>
+                        <div class="range-item-dates">${dateDisplay}</div>
+                        <div class="range-item-days">${days} day${days > 1 ? 's' : ''}</div>
+                    </div>
+                    <button class="range-item-remove" onclick="app.removeRange(${idx})">×</button>
+                </div>
+            `;
+        }).join('');
     },
 
     /**
@@ -283,9 +379,14 @@ const app = {
      * Confirm availability selection
      */
     confirmAvailability() {
-        // Save unavailable dates to participant
+        if (this.selectedRanges.length === 0) {
+            alert('Please select at least one date range when you are available');
+            return;
+        }
+
+        // Save available ranges to participant
         TripState.updateParticipant(this.currentTrip, this.currentTrip.currentUser, {
-            unavailableDates: Array.from(this.selectedUnavailableDates),
+            availableRanges: [...this.selectedRanges],
             completed: true
         });
 
@@ -614,33 +715,16 @@ const app = {
     buildPrompt() {
         const trip = this.currentTrip;
 
-        // Calculate available dates (dates where everyone is free)
-        const allUnavailable = new Set();
-        trip.participants.forEach(p => {
-            p.unavailableDates.forEach(d => allUnavailable.add(d));
-        });
-
-        // Get date range (next 6 months)
-        const startDate = new Date();
-        const endDate = new Date();
-        endDate.setMonth(endDate.getMonth() + 6);
-
-        const availableDates = [];
-        const current = new Date(startDate);
-        while (current <= endDate) {
-            const dateStr = current.toISOString().split('T')[0];
-            if (!allUnavailable.has(dateStr)) {
-                availableDates.push(dateStr);
-            }
-            current.setDate(current.getDate() + 1);
-        }
-
-        // Find consecutive date ranges
-        const dateRanges = this.findConsecutiveRanges(availableDates);
+        // Find overlapping available dates across all participants
+        const overlappingRanges = this.findOverlappingRanges(trip.participants);
 
         const destinationOptions = trip.destinations.map((d, i) =>
             `Option ${i + 1}: ${d.countries.join(', ')}`
         ).join('\n');
+
+        const rangesText = overlappingRanges.length > 0
+            ? overlappingRanges.map(r => `${r.start} to ${r.end} (${r.days} days)`).join('\n')
+            : 'No overlapping dates found';
 
         return `You are a travel planning assistant. Analyze the following trip details and recommend the TOP 3 best combinations of dates and destinations.
 
@@ -650,8 +734,8 @@ PARTICIPANTS: ${trip.participants.map(p => p.name).join(', ')}
 DESTINATION OPTIONS:
 ${destinationOptions}
 
-AVAILABLE DATE RANGES (when all ${trip.participants.length} participants are free):
-${dateRanges.map(r => `${r.start} to ${r.end} (${r.days} days)`).join('\n')}
+AVAILABLE DATE RANGES (when all ${trip.participants.length} participant${trip.participants.length > 1 ? 's are' : ' is'} free):
+${rangesText}
 
 For each recommendation, consider:
 1. Weather at the destination during those dates
@@ -685,6 +769,40 @@ IMPORTANT: Respond ONLY with valid JSON in this exact format:
 }
 
 Ratings are 1-5 stars. Price is per person round-trip flight estimate.`;
+    },
+
+    /**
+     * Find overlapping available ranges across all participants
+     */
+    findOverlappingRanges(participants) {
+        if (participants.length === 0) return [];
+
+        // Get all available dates for each participant as sets
+        const participantDates = participants.map(p => {
+            const dates = new Set();
+            (p.availableRanges || []).forEach(range => {
+                const start = new Date(range.start);
+                const end = new Date(range.end);
+                const current = new Date(start);
+                while (current <= end) {
+                    dates.add(current.toISOString().split('T')[0]);
+                    current.setDate(current.getDate() + 1);
+                }
+            });
+            return dates;
+        });
+
+        // Find intersection of all date sets
+        if (participantDates.length === 0) return [];
+
+        let commonDates = participantDates[0];
+        for (let i = 1; i < participantDates.length; i++) {
+            commonDates = new Set([...commonDates].filter(d => participantDates[i].has(d)));
+        }
+
+        // Convert back to sorted array and find consecutive ranges
+        const sortedDates = [...commonDates].sort();
+        return this.findConsecutiveRanges(sortedDates);
     },
 
     /**
