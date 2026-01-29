@@ -44,6 +44,7 @@
                 <div class="header">
                     <button class="btn-back" onclick="app.showScreen('home')">←</button>
                     <h2>Create a Trip</h2>
+                    <button class="btn-home" onclick="app.goHome()">Home</button>
                 </div>
 
                 <form id="create-trip-form" onsubmit="app.handleCreateTrip(event)">
@@ -74,6 +75,7 @@
                 <div class="header">
                     <button class="btn-back" onclick="app.goBack()">←</button>
                     <h2>Who are you?</h2>
+                    <button class="btn-home" onclick="app.goHome()">Home</button>
                 </div>
 
                 <p class="subtitle">Select your name from the list</p>
@@ -88,6 +90,7 @@
                 <div class="header">
                     <button class="btn-back" onclick="app.goBack()">←</button>
                     <h2>Your Availability</h2>
+                    <button class="btn-home" onclick="app.goHome()">Home</button>
                 </div>
 
                 <p class="subtitle">Select dates when you <strong>ARE available</strong></p>
@@ -107,12 +110,40 @@
             </div>
         </div>
 
+        <!-- Max Duration Screen -->
+        <div id="screen-max-duration" class="screen">
+            <div class="container">
+                <div class="header">
+                    <button class="btn-back" onclick="app.goBack()">←</button>
+                    <h2>Trip Duration</h2>
+                    <button class="btn-home" onclick="app.goHome()">Home</button>
+                </div>
+
+                <p class="subtitle">What's the maximum trip length you can do?</p>
+
+                <div class="duration-inputs">
+                    <div class="form-group">
+                        <label for="max-days">Max consecutive days</label>
+                        <input type="number" id="max-days" min="1" max="30" value="7">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="max-weeks">Max consecutive weeks</label>
+                        <input type="number" id="max-weeks" min="1" max="8" value="2">
+                    </div>
+                </div>
+
+                <button class="btn btn-primary btn-full" onclick="app.confirmMaxDuration()">Continue</button>
+            </div>
+        </div>
+
         <!-- Destinations Screen (Owner only) -->
         <div id="screen-destinations" class="screen">
             <div class="container">
                 <div class="header">
                     <button class="btn-back" onclick="app.goBack()">←</button>
                     <h2>Destination Options</h2>
+                    <button class="btn-home" onclick="app.goHome()">Home</button>
                 </div>
 
                 <p class="subtitle">Add destination options for voting. Each option can include multiple countries.</p>
@@ -128,6 +159,7 @@
         <!-- Waiting Screen -->
         <div id="screen-waiting" class="screen">
             <div class="container center-content">
+                <button class="btn-home btn-home-floating" onclick="app.goHome()">Home</button>
                 <div class="waiting-icon">⏳</div>
                 <h2>Waiting for everyone</h2>
                 <p class="subtitle">Share this link with your friends:</p>
