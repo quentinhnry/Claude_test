@@ -30,11 +30,6 @@
                     <div id="trips-container"></div>
                 </div>
 
-                <div class="api-key-section">
-                    <button class="btn btn-text" onclick="app.showApiKeyDialog()">
-                        ⚙️ Set Claude API Key
-                    </button>
-                </div>
             </div>
         </div>
 
@@ -197,19 +192,6 @@
         <div id="loading-overlay" class="loading-overlay">
             <div class="spinner"></div>
             <p id="loading-text">Analyzing your trip...</p>
-        </div>
-
-        <!-- API Key Dialog -->
-        <div id="api-key-dialog" class="dialog-overlay">
-            <div class="dialog">
-                <h3>Claude API Key</h3>
-                <p>Enter your Anthropic API key. It will be stored locally in your browser.</p>
-                <input type="password" id="api-key-input" placeholder="sk-ant-...">
-                <div class="dialog-actions">
-                    <button class="btn btn-text" onclick="app.closeApiKeyDialog()">Cancel</button>
-                    <button class="btn btn-primary" onclick="app.saveApiKey()">Save</button>
-                </div>
-            </div>
         </div>
 
         <!-- Join Dialog -->

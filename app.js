@@ -29,9 +29,6 @@ const app = {
 
         // Load trip history
         this.renderTripHistory();
-
-        // Check if API key is set
-        this.updateApiKeyStatus();
     },
 
     /**
@@ -631,42 +628,6 @@ const app = {
     },
 
     /**
-     * Show API key dialog
-     */
-    showApiKeyDialog() {
-        const dialog = document.getElementById('api-key-dialog');
-        const input = document.getElementById('api-key-input');
-        input.value = TripState.getApiKey() || '';
-        dialog.classList.add('active');
-    },
-
-    /**
-     * Close API key dialog
-     */
-    closeApiKeyDialog() {
-        document.getElementById('api-key-dialog').classList.remove('active');
-    },
-
-    /**
-     * Save API key
-     */
-    saveApiKey() {
-        const input = document.getElementById('api-key-input');
-        const key = input.value.trim();
-        TripState.saveApiKey(key);
-        this.closeApiKeyDialog();
-        this.updateApiKeyStatus();
-    },
-
-    /**
-     * Update API key status indicator
-     */
-    updateApiKeyStatus() {
-        const hasKey = !!TripState.getApiKey();
-        // Could add visual indicator here
-    },
-
-    /**
      * Show join dialog
      */
     showJoinDialog() {
@@ -756,19 +717,11 @@ const app = {
      * Generate AI recommendations
      */
     async generateRecommendations() {
-        const apiKey = TripState.getApiKey();
-
-        if (!apiKey) {
-            alert('Please set your Claude API key first');
-            this.showApiKeyDialog();
-            return;
-        }
-
         this.showLoading('Analyzing availability, weather, and prices...');
 
         try {
             const prompt = this.buildPrompt();
-            const response = await this.callClaudeAPI(prompt, apiKey);
+            const response = await this.callAIProxy(prompt);
             const recommendations = this.parseRecommendations(response);
 
             this.renderResults(recommendations);
@@ -929,36 +882,24 @@ Ratings are 1-5 stars. Price is per person round-trip flight estimate.`;
     },
 
     /**
-     * Call Claude API
+     * Call AI Proxy
      */
-    async callClaudeAPI(prompt, apiKey) {
-        const response = await fetch('https://api.anthropic.com/v1/messages', {
+    async callAIProxy(prompt) {
+        const response = await fetch('https://proxy-ai-psi.vercel.app/api/gemini', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                'x-api-key': apiKey,
-                'anthropic-version': '2023-06-01',
-                'anthropic-dangerous-direct-browser-access': 'true'
+                'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                model: 'claude-sonnet-4-20250514',
-                max_tokens: 1500,
-                messages: [
-                    {
-                        role: 'user',
-                        content: prompt
-                    }
-                ]
-            })
+            body: JSON.stringify({ prompt: prompt })
         });
 
         if (!response.ok) {
             const error = await response.json();
-            throw new Error(error.error?.message || 'API request failed');
+            throw new Error(error.error || 'API request failed');
         }
 
         const data = await response.json();
-        return data.content[0].text;
+        return data.text;
     },
 
     /**

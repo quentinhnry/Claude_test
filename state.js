@@ -129,22 +129,6 @@ const TripState = {
     },
 
     /**
-     * Save API key to local storage
-     * @param {string} key - The API key
-     */
-    saveApiKey(key) {
-        localStorage.setItem('tripsync_api_key', key);
-    },
-
-    /**
-     * Get API key from local storage
-     * @returns {string|null}
-     */
-    getApiKey() {
-        return localStorage.getItem('tripsync_api_key');
-    },
-
-    /**
      * Check if all participants have completed their availability
      * @param {Object} trip - The trip object
      * @returns {boolean}
