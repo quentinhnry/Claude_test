@@ -72,6 +72,8 @@ const TripState = {
             participants: participants.map(p => ({
                 name: p,
                 availableRanges: [],
+                maxDays: null,
+                maxWeeks: null,
                 completed: false
             })),
             destinations: [],

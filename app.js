@@ -77,6 +77,19 @@ const app = {
     },
 
     /**
+     * Go to home screen (exit flow)
+     */
+    goHome() {
+        TripState.clearUrl();
+        this.currentTrip = null;
+        this.screenHistory = [];
+        this.selectedRanges = [];
+        this.rangeSelectionStart = null;
+        this.showScreen('home');
+        this.renderTripHistory();
+    },
+
+    /**
      * Handle create trip form submission
      */
     handleCreateTrip(event) {
@@ -384,9 +397,41 @@ const app = {
             return;
         }
 
-        // Save available ranges to participant
+        // Save available ranges to participant (not completed yet - need max duration)
         TripState.updateParticipant(this.currentTrip, this.currentTrip.currentUser, {
-            availableRanges: [...this.selectedRanges],
+            availableRanges: [...this.selectedRanges]
+        });
+
+        // Go to max duration screen
+        this.showScreen('max-duration');
+        this.loadMaxDurationDefaults();
+    },
+
+    /**
+     * Load max duration defaults from participant data
+     */
+    loadMaxDurationDefaults() {
+        const participant = TripState.getParticipant(this.currentTrip, this.currentTrip.currentUser);
+        const maxDaysInput = document.getElementById('max-days');
+        const maxWeeksInput = document.getElementById('max-weeks');
+
+        if (participant) {
+            maxDaysInput.value = participant.maxDays || 7;
+            maxWeeksInput.value = participant.maxWeeks || 2;
+        }
+    },
+
+    /**
+     * Confirm max duration selection
+     */
+    confirmMaxDuration() {
+        const maxDays = parseInt(document.getElementById('max-days').value) || 7;
+        const maxWeeks = parseInt(document.getElementById('max-weeks').value) || 2;
+
+        // Save max duration and mark as completed
+        TripState.updateParticipant(this.currentTrip, this.currentTrip.currentUser, {
+            maxDays: maxDays,
+            maxWeeks: maxWeeks,
             completed: true
         });
 
@@ -397,6 +442,30 @@ const app = {
             // Save and go to waiting
             this.saveAndShowWaiting();
         }
+    },
+
+    /**
+     * Modify a participant's data (from waiting screen)
+     */
+    modifyParticipant(name) {
+        this.currentTrip.currentUser = name;
+
+        // Load participant's existing data
+        const participant = TripState.getParticipant(this.currentTrip, name);
+        if (participant && participant.availableRanges) {
+            this.selectedRanges = [...participant.availableRanges];
+        } else {
+            this.selectedRanges = [];
+        }
+        this.rangeSelectionStart = null;
+
+        // Mark as not completed so they can re-do
+        TripState.updateParticipant(this.currentTrip, name, {
+            completed: false
+        });
+
+        // Go to availability screen
+        this.showScreen('availability');
     },
 
     /**
@@ -522,14 +591,17 @@ const app = {
         const shareUrl = document.getElementById('share-url');
         shareUrl.value = TripState.encode(this.currentTrip);
 
-        // Render participant statuses
+        // Render participant statuses with modify buttons
         const statusContainer = document.getElementById('participants-status');
         statusContainer.innerHTML = this.currentTrip.participants.map(p => `
             <div class="participant-status-item">
-                <span>${p.name} ${p.name === this.currentTrip.currentUser ? '(you)' : ''}</span>
-                <span class="status-badge ${p.completed ? 'completed' : 'pending'}">
-                    ${p.completed ? 'Ready' : 'Pending'}
-                </span>
+                <div class="participant-info">
+                    <span>${p.name} ${p.name === this.currentTrip.currentUser ? '(you)' : ''}</span>
+                    <span class="status-badge ${p.completed ? 'completed' : 'pending'}">
+                        ${p.completed ? 'Ready' : 'Pending'}
+                    </span>
+                </div>
+                <button class="btn-modify" onclick="app.modifyParticipant('${p.name}')">Modify</button>
             </div>
         `).join('');
 
@@ -718,6 +790,10 @@ const app = {
         // Find overlapping available dates across all participants
         const overlappingRanges = this.findOverlappingRanges(trip.participants);
 
+        // Find minimum max duration across all participants
+        const maxDays = Math.min(...trip.participants.map(p => p.maxDays || 30));
+        const maxWeeks = Math.min(...trip.participants.map(p => p.maxWeeks || 8));
+
         const destinationOptions = trip.destinations.map((d, i) =>
             `Option ${i + 1}: ${d.countries.join(', ')}`
         ).join('\n');
@@ -737,10 +813,14 @@ ${destinationOptions}
 AVAILABLE DATE RANGES (when all ${trip.participants.length} participant${trip.participants.length > 1 ? 's are' : ' is'} free):
 ${rangesText}
 
+MAX TRIP DURATION: ${maxDays} consecutive days / ${maxWeeks} consecutive weeks
+(Trip recommendations must not exceed these limits)
+
 For each recommendation, consider:
 1. Weather at the destination during those dates
 2. Typical flight prices for that time (with checked luggage, from major European hubs)
 3. Duration suitability (weekend trip vs longer vacation)
+4. Must not exceed the max trip duration specified above
 
 IMPORTANT: Respond ONLY with valid JSON in this exact format:
 {

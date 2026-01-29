@@ -59,6 +59,7 @@ body {
 }
 
 .header h2 {
+    flex: 1;
     font-size: 1.5rem;
     font-weight: 600;
 }
@@ -70,6 +71,39 @@ body {
     cursor: pointer;
     color: var(--text);
     padding: 8px;
+}
+
+.btn-home {
+    background: var(--secondary);
+    border: none;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    cursor: pointer;
+    color: var(--text);
+    transition: all 0.2s;
+}
+
+.btn-home:hover {
+    background: var(--border);
+}
+
+.btn-home-floating {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: var(--secondary);
+    border: none;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    cursor: pointer;
+    color: var(--text);
+    transition: all 0.2s;
+}
+
+.btn-home-floating:hover {
+    background: var(--border);
 }
 
 /* Logo */
@@ -364,6 +398,32 @@ body {
     padding: 16px;
 }
 
+/* Duration Inputs */
+.duration-inputs {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    margin-bottom: 24px;
+}
+
+.duration-inputs .form-group {
+    margin-bottom: 0;
+}
+
+.duration-inputs input[type="number"] {
+    width: 100%;
+    padding: 14px 16px;
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    font-size: 1.25rem;
+    text-align: center;
+}
+
+.duration-inputs input[type="number"]:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
 /* Destinations */
 .destinations-list {
     display: flex;
@@ -485,6 +545,31 @@ body {
     background: var(--card-bg);
     border-radius: 10px;
     margin-bottom: 8px;
+    gap: 12px;
+}
+
+.participant-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+}
+
+.btn-modify {
+    background: var(--secondary);
+    border: none;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    color: var(--primary);
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.btn-modify:hover {
+    background: var(--primary);
+    color: white;
 }
 
 .status-badge {
