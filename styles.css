@@ -30,6 +30,7 @@ body {
     display: none;
     min-height: 100vh;
     padding: 20px;
+    position: relative;
 }
 
 .screen.active {
@@ -73,37 +74,28 @@ body {
     padding: 8px;
 }
 
-.btn-home {
-    background: var(--secondary);
-    border: none;
-    padding: 8px 16px;
-    border-radius: 8px;
-    font-size: 0.875rem;
-    cursor: pointer;
-    color: var(--text);
-    transition: all 0.2s;
-}
-
-.btn-home:hover {
-    background: var(--border);
-}
-
-.btn-home-floating {
+.btn-home-icon {
     position: absolute;
     top: 20px;
     right: 20px;
     background: var(--secondary);
     border: none;
-    padding: 8px 16px;
-    border-radius: 8px;
-    font-size: 0.875rem;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    font-size: 1.25rem;
     cursor: pointer;
-    color: var(--text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
     transition: all 0.2s;
+    z-index: 10;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-.btn-home-floating:hover {
+.btn-home-icon:hover {
     background: var(--border);
+    transform: scale(1.1);
 }
 
 /* Logo */
