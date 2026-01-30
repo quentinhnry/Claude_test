@@ -735,7 +735,7 @@ const app = {
     },
 
     /**
-     * Build the prompt for Claude
+     * Build the prompt for AI
      */
     buildPrompt() {
         const trip = this.currentTrip;
@@ -903,7 +903,7 @@ Ratings are 1-5 stars. Price is per person round-trip flight estimate.`;
     },
 
     /**
-     * Parse recommendations from Claude's response
+     * Parse recommendations from AI response
      */
     parseRecommendations(response) {
         try {
