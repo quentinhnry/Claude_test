@@ -945,7 +945,8 @@ Ratings are 1-5 stars. All prices in EUR (€), per person round-trip with check
         const response = await fetch('https://proxy-ai-psi.vercel.app/api/gemini', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'X-App-Token': 'Marie'
             },
             body: JSON.stringify({ prompt: prompt })
         });
