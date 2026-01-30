@@ -116,16 +116,11 @@
 
                 <p class="subtitle">What's the maximum trip length you can do?</p>
 
-                <div class="duration-inputs">
-                    <div class="form-group">
-                        <label for="max-days">Max consecutive days</label>
-                        <input type="number" id="max-days" min="1" max="30" value="7">
-                    </div>
-
-                    <div class="form-group">
-                        <label for="max-weeks">Max consecutive weeks</label>
-                        <input type="number" id="max-weeks" min="1" max="8" value="2">
-                    </div>
+                <div class="duration-inline">
+                    <input type="number" id="max-weeks" min="0" max="8" value="2">
+                    <span class="duration-label">weeks and</span>
+                    <input type="number" id="max-days" min="0" max="30" value="0">
+                    <span class="duration-label">days</span>
                 </div>
 
                 <button class="btn btn-primary btn-full" onclick="app.confirmMaxDuration()">Continue</button>

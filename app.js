@@ -413,9 +413,15 @@ const app = {
         const maxDaysInput = document.getElementById('max-days');
         const maxWeeksInput = document.getElementById('max-weeks');
 
-        if (participant) {
-            maxDaysInput.value = participant.maxDays || 7;
-            maxWeeksInput.value = participant.maxWeeks || 2;
+        if (participant && participant.maxDays) {
+            // Convert total days back to weeks + days for display
+            const totalDays = participant.maxDays;
+            maxWeeksInput.value = Math.floor(totalDays / 7);
+            maxDaysInput.value = totalDays % 7;
+        } else {
+            // Default: 2 weeks and 0 days = 14 days
+            maxWeeksInput.value = 2;
+            maxDaysInput.value = 0;
         }
     },
 
@@ -423,13 +429,21 @@ const app = {
      * Confirm max duration selection
      */
     confirmMaxDuration() {
-        const maxDays = parseInt(document.getElementById('max-days').value) || 7;
-        const maxWeeks = parseInt(document.getElementById('max-weeks').value) || 2;
+        const days = parseInt(document.getElementById('max-days').value) || 0;
+        const weeks = parseInt(document.getElementById('max-weeks').value) || 0;
 
-        // Save max duration (not completed yet - need departure city)
+        // Calculate total max days
+        const totalMaxDays = (weeks * 7) + days;
+
+        if (totalMaxDays < 1) {
+            alert('Please enter a valid trip duration');
+            return;
+        }
+
+        // Save max duration as total days (not completed yet - need departure city)
         TripState.updateParticipant(this.currentTrip, this.currentTrip.currentUser, {
-            maxDays: maxDays,
-            maxWeeks: maxWeeks
+            maxDays: totalMaxDays,
+            maxWeeks: weeks // Keep for backward compatibility
         });
 
         // Go to departure city screen
@@ -778,13 +792,8 @@ const app = {
         // Find overlapping available dates across all participants
         const overlappingRanges = this.findOverlappingRanges(trip.participants);
 
-        // Find minimum max duration across all participants (use the LOWER of maxDays vs maxWeeks*7)
-        const participantMaxDays = trip.participants.map(p => {
-            const days = p.maxDays || 30;
-            const weeksInDays = (p.maxWeeks || 8) * 7;
-            return Math.min(days, weeksInDays);
-        });
-        const maxTripLength = Math.min(...participantMaxDays);
+        // Find minimum max duration across all participants
+        const maxTripLength = Math.min(...trip.participants.map(p => p.maxDays || 14));
 
         // Get departure cities
         const departureCities = trip.participants.map(p => ({
@@ -819,12 +828,12 @@ ${rangesText}
 MAX TRIP LENGTH: ${maxTripLength} days
 (This is the strictest constraint across all participants - recommendations MUST NOT exceed this)
 
-For each recommendation, consider:
-1. WEATHER: The best combination of temperature and conditions for visiting (sunny, pleasant temps, low rain). Rate the overall weather quality for tourism.
-2. FLIGHT PRICES: Estimate round-trip flight prices WITH checked luggage from EACH departure city (${uniqueCities.join(', ')}). The overall price rating should reflect the BEST AVERAGE price across all departure cities.
+For each recommendation, provide:
+1. WEATHER: Rate the weather quality for tourism (best combo of temperature + low rain). Provide average min/max temperatures and average rainy days per month for that period.
+2. FLIGHT PRICES: Estimate round-trip prices WITH checked luggage from EACH departure city. Compare to yearly average: is this period "lower", "typical", or "higher" than usual (like Google Flights)?
 3. Trip must fit within ${maxTripLength} days maximum.
 
-IMPORTANT: Respond ONLY with valid JSON in this exact format:
+IMPORTANT: Respond ONLY with valid JSON in this exact format (no markdown, no code blocks):
 {
   "recommendations": [
     {
@@ -836,12 +845,13 @@ IMPORTANT: Respond ONLY with valid JSON in this exact format:
       "weatherRating": 4.5,
       "weatherSummary": "Brief weather summary",
       "weatherDetails": {
-        "tempRange": "18-25°C",
-        "rainyDays": 3,
-        "description": "Warm and mostly sunny with occasional afternoon showers"
+        "avgMinTemp": 15,
+        "avgMaxTemp": 24,
+        "avgRainyDaysPerMonth": 5,
+        "description": "Weather description for this period"
       },
       "avgFlightPrice": 180,
-      "priceRating": 4,
+      "priceComparison": "lower",
       "flightsByCity": {
         ${uniqueCities.map(c => `"${c}": 150`).join(',\n        ')}
       },
@@ -858,7 +868,11 @@ IMPORTANT: Respond ONLY with valid JSON in this exact format:
   ]
 }
 
-Ratings are 1-5 stars. All prices in EUR (€), per person round-trip with checked luggage.`;
+- weatherRating: 1-5 stars (5 = excellent weather for tourism)
+- priceComparison: "lower" / "typical" / "higher" compared to yearly average
+- All prices in EUR (€), per person round-trip with checked luggage
+- avgMinTemp/avgMaxTemp in Celsius
+- avgRainyDaysPerMonth: average number of rainy days per month during the trip period`;
     },
 
     /**
@@ -965,8 +979,14 @@ Ratings are 1-5 stars. All prices in EUR (€), per person round-trip with check
      */
     parseRecommendations(response) {
         try {
+            // Strip markdown code blocks if present (```json ... ``` or ``` ... ```)
+            let cleanResponse = response;
+            cleanResponse = cleanResponse.replace(/```json\s*/gi, '');
+            cleanResponse = cleanResponse.replace(/```\s*/g, '');
+            cleanResponse = cleanResponse.trim();
+
             // Try to extract JSON from response
-            const jsonMatch = response.match(/\{[\s\S]*\}/);
+            const jsonMatch = cleanResponse.match(/\{[\s\S]*\}/);
             if (jsonMatch) {
                 const parsed = JSON.parse(jsonMatch[0]);
                 return parsed.recommendations;
@@ -983,7 +1003,7 @@ Ratings are 1-5 stars. All prices in EUR (€), per person round-trip with check
             endDate: '',
             weatherRating: 0,
             priceRating: 0,
-            priceRange: 'N/A',
+            avgFlightPrice: 'N/A',
             reasoning: response
         }];
     },
@@ -1037,21 +1057,27 @@ Ratings are 1-5 stars. All prices in EUR (€), per person round-trip with check
             `).join('');
         }
 
+        // Price comparison badge
+        const priceComparisonText = {
+            'lower': '↓ Lower than usual',
+            'typical': '→ Typical price',
+            'higher': '↑ Higher than usual'
+        };
+        const priceComparisonClass = {
+            'lower': 'price-lower',
+            'typical': 'price-typical',
+            'higher': 'price-higher'
+        };
+        const comparison = rec.priceComparison || 'typical';
+
         // Build weather details HTML
         const weather = rec.weatherDetails || {};
-        const weatherHtml = `
-            <div class="detail-weather-info">
-                <div class="detail-weather-row">
-                    <span class="detail-weather-label">Temperature</span>
-                    <span class="detail-weather-value">${weather.tempRange || 'N/A'}</span>
-                </div>
-                <div class="detail-weather-row">
-                    <span class="detail-weather-label">Rainy days</span>
-                    <span class="detail-weather-value">${weather.rainyDays !== undefined ? weather.rainyDays + ' days' : 'N/A'}</span>
-                </div>
-                <div class="detail-weather-description">${weather.description || rec.weatherSummary || ''}</div>
-            </div>
-        `;
+        const tempDisplay = (weather.avgMinTemp !== undefined && weather.avgMaxTemp !== undefined)
+            ? `${weather.avgMinTemp}°C - ${weather.avgMaxTemp}°C`
+            : 'N/A';
+        const rainyDaysDisplay = weather.avgRainyDaysPerMonth !== undefined
+            ? `${weather.avgRainyDaysPerMonth} days/month`
+            : 'N/A';
 
         content.innerHTML = `
             <div class="detail-header">
@@ -1069,15 +1095,24 @@ Ratings are 1-5 stars. All prices in EUR (€), per person round-trip with check
                         <span>€${rec.avgFlightPrice || 'N/A'}</span>
                     </div>
                 </div>
-                <div class="detail-rating">
-                    <span>Price rating:</span>
-                    <span class="rating-stars">${this.renderStars(rec.priceRating)}</span>
+                <div class="detail-comparison ${priceComparisonClass[comparison]}">
+                    ${priceComparisonText[comparison]}
                 </div>
             </div>
 
             <div class="detail-section">
                 <h4>☀️ Weather</h4>
-                ${weatherHtml}
+                <div class="detail-weather-info">
+                    <div class="detail-weather-row">
+                        <span class="detail-weather-label">Avg. temperature</span>
+                        <span class="detail-weather-value">${tempDisplay}</span>
+                    </div>
+                    <div class="detail-weather-row">
+                        <span class="detail-weather-label">Avg. rainy days</span>
+                        <span class="detail-weather-value">${rainyDaysDisplay}</span>
+                    </div>
+                    <div class="detail-weather-description">${weather.description || rec.weatherSummary || ''}</div>
+                </div>
                 <div class="detail-rating">
                     <span>Weather rating:</span>
                     <span class="rating-stars">${this.renderStars(rec.weatherRating)}</span>
