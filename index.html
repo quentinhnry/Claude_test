@@ -13,7 +13,7 @@
             <div class="container">
                 <div class="logo">
                     <h1>✈️ TripSync</h1>
-                    <p class="tagline">Plan trips with friends, powered by AI</p>
+                    <p class="tagline">Plan trips with friends, effortlessly</p>
                 </div>
 
                 <div class="actions">
@@ -182,17 +182,18 @@
                 <div id="participants-status" class="participants-status"></div>
 
                 <button id="btn-generate" class="btn btn-primary btn-full" onclick="app.generateRecommendations()" style="display: none">
-                    Generate AI Recommendations
+                    Generate Recommendations
                 </button>
             </div>
         </div>
 
         <!-- Results Screen -->
         <div id="screen-results" class="screen">
+            <button class="btn-home-icon" onclick="app.goHome()" title="Home">🏠</button>
             <div class="container">
                 <div class="header">
                     <button class="btn-back" onclick="app.showScreen('waiting')">←</button>
-                    <h2>AI Recommendations</h2>
+                    <h2>Recommendations</h2>
                 </div>
 
                 <p class="subtitle">Tap a recommendation for details</p>
