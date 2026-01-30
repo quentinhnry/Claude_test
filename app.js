@@ -651,10 +651,23 @@ const app = {
             </div>
         `).join('');
 
-        // Show generate button if all completed
+        // Show generate/see button if all completed
         const generateBtn = document.getElementById('btn-generate');
         if (TripState.allCompleted(this.currentTrip)) {
             generateBtn.style.display = 'block';
+
+            // Check if valid recommendations already exist
+            const hasRecommendations = this.currentRecommendations
+                && this.currentRecommendations.length > 0
+                && this.currentRecommendations[0].destination !== 'Parsing Error';
+
+            if (hasRecommendations) {
+                generateBtn.textContent = 'See Recommendations';
+                generateBtn.onclick = () => this.showScreen('results');
+            } else {
+                generateBtn.textContent = 'Generate Recommendations';
+                generateBtn.onclick = () => this.generateRecommendations();
+            }
         } else {
             generateBtn.style.display = 'none';
         }
