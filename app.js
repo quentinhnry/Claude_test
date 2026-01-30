@@ -24,6 +24,12 @@ const app = {
         if (tripFromUrl) {
             this.currentTrip = tripFromUrl;
             this.isJoining = true;
+
+            // Restore recommendations if they exist
+            if (tripFromUrl.recommendations) {
+                this.currentRecommendations = tripFromUrl.recommendations;
+            }
+
             this.showScreen('select-identity');
             this.renderIdentityList();
         }
@@ -757,6 +763,11 @@ const app = {
             this.currentTrip = trip;
             this.isJoining = false;
 
+            // Restore recommendations if they exist
+            if (trip.recommendations) {
+                this.currentRecommendations = trip.recommendations;
+            }
+
             // Go to waiting screen to see status / continue
             TripState.updateUrl(trip);
             this.showScreen('waiting');
@@ -785,6 +796,10 @@ const app = {
             const prompt = this.buildPrompt();
             const response = await this.callAIProxy(prompt);
             const recommendations = this.parseRecommendations(response);
+
+            // Save recommendations to trip and persist
+            this.currentTrip.recommendations = recommendations;
+            TripState.saveToHistory(this.currentTrip);
 
             this.renderResults(recommendations);
             this.hideLoading();
