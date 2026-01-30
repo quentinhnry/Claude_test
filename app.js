@@ -979,32 +979,50 @@ IMPORTANT: Respond ONLY with valid JSON in this exact format (no markdown, no co
      */
     parseRecommendations(response) {
         try {
-            // Strip markdown code blocks if present (```json ... ``` or ``` ... ```)
-            let cleanResponse = response;
-            cleanResponse = cleanResponse.replace(/```json\s*/gi, '');
-            cleanResponse = cleanResponse.replace(/```\s*/g, '');
-            cleanResponse = cleanResponse.trim();
+            // Strip markdown code blocks if present
+            let cleanResponse = response
+                .replace(/```json\s*/gi, '')
+                .replace(/```\s*/g, '')
+                .trim();
 
-            // Try to extract JSON from response
-            const jsonMatch = cleanResponse.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-                const parsed = JSON.parse(jsonMatch[0]);
-                return parsed.recommendations;
+            // Find the first { and extract balanced JSON using brace counting
+            const startIdx = cleanResponse.indexOf('{');
+            if (startIdx === -1) throw new Error('No JSON object found');
+
+            let braceCount = 0;
+            let endIdx = -1;
+            for (let i = startIdx; i < cleanResponse.length; i++) {
+                if (cleanResponse[i] === '{') braceCount++;
+                if (cleanResponse[i] === '}') braceCount--;
+                if (braceCount === 0) {
+                    endIdx = i;
+                    break;
+                }
             }
+
+            if (endIdx === -1) throw new Error('Unbalanced braces in JSON');
+
+            const jsonStr = cleanResponse.substring(startIdx, endIdx + 1);
+            const parsed = JSON.parse(jsonStr);
+
+            if (!parsed.recommendations || !Array.isArray(parsed.recommendations)) {
+                throw new Error('Missing recommendations array');
+            }
+
+            return parsed.recommendations;
         } catch (e) {
-            console.error('Failed to parse recommendations:', e);
+            console.error('Failed to parse recommendations:', e, '\nResponse:', response);
         }
 
-        // Fallback
+        // Fallback with helpful message
         return [{
             rank: 1,
-            destination: 'Unable to parse',
+            destination: 'Parsing Error',
             startDate: '',
             endDate: '',
             weatherRating: 0,
-            priceRating: 0,
             avgFlightPrice: 'N/A',
-            reasoning: response
+            reasoning: 'Failed to parse AI response. Please tap Regenerate to try again.'
         }];
     },
 
