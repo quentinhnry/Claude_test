@@ -74,6 +74,7 @@ const TripState = {
                 availableRanges: [],
                 maxDays: null,
                 maxWeeks: null,
+                departureCity: null,
                 completed: false
             })),
             destinations: [],

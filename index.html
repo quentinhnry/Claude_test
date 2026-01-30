@@ -132,6 +132,26 @@
             </div>
         </div>
 
+        <!-- Departure City Screen -->
+        <div id="screen-departure-city" class="screen">
+            <button class="btn-home-icon" onclick="app.goHome()" title="Home">🏠</button>
+            <div class="container">
+                <div class="header">
+                    <button class="btn-back" onclick="app.goBack()">←</button>
+                    <h2>Departure City</h2>
+                </div>
+
+                <p class="subtitle">Where will you be flying from?</p>
+
+                <div class="form-group">
+                    <label for="departure-city">Your departure city</label>
+                    <input type="text" id="departure-city" placeholder="e.g. Paris, London, Berlin...">
+                </div>
+
+                <button class="btn btn-primary btn-full" onclick="app.confirmDepartureCity()">Continue</button>
+            </div>
+        </div>
+
         <!-- Destinations Screen (Owner only) -->
         <div id="screen-destinations" class="screen">
             <button class="btn-home-icon" onclick="app.goHome()" title="Home">🏠</button>
@@ -180,11 +200,21 @@
                     <h2>AI Recommendations</h2>
                 </div>
 
+                <p class="subtitle">Tap a recommendation for details</p>
+
                 <div id="results-container" class="results-container"></div>
 
                 <button class="btn btn-secondary btn-full" onclick="app.regenerate()">
                     🔄 Regenerate
                 </button>
+            </div>
+        </div>
+
+        <!-- Recommendation Detail Popup -->
+        <div id="recommendation-detail" class="dialog-overlay">
+            <div class="dialog dialog-large">
+                <button class="dialog-close" onclick="app.closeRecommendationDetail()">×</button>
+                <div id="recommendation-detail-content"></div>
             </div>
         </div>
 

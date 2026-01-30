@@ -13,6 +13,7 @@ const app = {
     lastTapDate: null,
     screenHistory: [],
     isJoining: false,
+    currentRecommendations: [],
 
     /**
      * Initialize the app
@@ -425,10 +426,44 @@ const app = {
         const maxDays = parseInt(document.getElementById('max-days').value) || 7;
         const maxWeeks = parseInt(document.getElementById('max-weeks').value) || 2;
 
-        // Save max duration and mark as completed
+        // Save max duration (not completed yet - need departure city)
         TripState.updateParticipant(this.currentTrip, this.currentTrip.currentUser, {
             maxDays: maxDays,
-            maxWeeks: maxWeeks,
+            maxWeeks: maxWeeks
+        });
+
+        // Go to departure city screen
+        this.showScreen('departure-city');
+        this.loadDepartureCityDefault();
+    },
+
+    /**
+     * Load departure city default from participant data
+     */
+    loadDepartureCityDefault() {
+        const participant = TripState.getParticipant(this.currentTrip, this.currentTrip.currentUser);
+        const input = document.getElementById('departure-city');
+        if (participant && participant.departureCity) {
+            input.value = participant.departureCity;
+        } else {
+            input.value = '';
+        }
+    },
+
+    /**
+     * Confirm departure city selection
+     */
+    confirmDepartureCity() {
+        const departureCity = document.getElementById('departure-city').value.trim();
+
+        if (!departureCity) {
+            alert('Please enter your departure city');
+            return;
+        }
+
+        // Save departure city and mark as completed
+        TripState.updateParticipant(this.currentTrip, this.currentTrip.currentUser, {
+            departureCity: departureCity,
             completed: true
         });
 
@@ -735,7 +770,7 @@ const app = {
     },
 
     /**
-     * Build the prompt for Claude
+     * Build the prompt for AI
      */
     buildPrompt() {
         const trip = this.currentTrip;
@@ -743,9 +778,21 @@ const app = {
         // Find overlapping available dates across all participants
         const overlappingRanges = this.findOverlappingRanges(trip.participants);
 
-        // Find minimum max duration across all participants
-        const maxDays = Math.min(...trip.participants.map(p => p.maxDays || 30));
-        const maxWeeks = Math.min(...trip.participants.map(p => p.maxWeeks || 8));
+        // Find minimum max duration across all participants (use the LOWER of maxDays vs maxWeeks*7)
+        const participantMaxDays = trip.participants.map(p => {
+            const days = p.maxDays || 30;
+            const weeksInDays = (p.maxWeeks || 8) * 7;
+            return Math.min(days, weeksInDays);
+        });
+        const maxTripLength = Math.min(...participantMaxDays);
+
+        // Get departure cities
+        const departureCities = trip.participants.map(p => ({
+            name: p.name,
+            city: p.departureCity || 'Unknown'
+        }));
+        const departureCitiesText = departureCities.map(d => `- ${d.name}: ${d.city}`).join('\n');
+        const uniqueCities = [...new Set(departureCities.map(d => d.city))];
 
         const destinationOptions = trip.destinations.map((d, i) =>
             `Option ${i + 1}: ${d.countries.join(', ')}`
@@ -760,20 +807,22 @@ const app = {
 TRIP: "${trip.name}"
 PARTICIPANTS: ${trip.participants.map(p => p.name).join(', ')}
 
+DEPARTURE CITIES:
+${departureCitiesText}
+
 DESTINATION OPTIONS:
 ${destinationOptions}
 
 AVAILABLE DATE RANGES (when all ${trip.participants.length} participant${trip.participants.length > 1 ? 's are' : ' is'} free):
 ${rangesText}
 
-MAX TRIP DURATION: ${maxDays} consecutive days / ${maxWeeks} consecutive weeks
-(Trip recommendations must not exceed these limits)
+MAX TRIP LENGTH: ${maxTripLength} days
+(This is the strictest constraint across all participants - recommendations MUST NOT exceed this)
 
 For each recommendation, consider:
-1. Weather at the destination during those dates
-2. Typical flight prices for that time (with checked luggage, from major European hubs)
-3. Duration suitability (weekend trip vs longer vacation)
-4. Must not exceed the max trip duration specified above
+1. WEATHER: The best combination of temperature and conditions for visiting (sunny, pleasant temps, low rain). Rate the overall weather quality for tourism.
+2. FLIGHT PRICES: Estimate round-trip flight prices WITH checked luggage from EACH departure city (${uniqueCities.join(', ')}). The overall price rating should reflect the BEST AVERAGE price across all departure cities.
+3. Trip must fit within ${maxTripLength} days maximum.
 
 IMPORTANT: Respond ONLY with valid JSON in this exact format:
 {
@@ -785,9 +834,17 @@ IMPORTANT: Respond ONLY with valid JSON in this exact format:
       "startDate": "YYYY-MM-DD",
       "endDate": "YYYY-MM-DD",
       "weatherRating": 4.5,
-      "weatherDescription": "Brief weather description",
+      "weatherSummary": "Brief weather summary",
+      "weatherDetails": {
+        "tempRange": "18-25°C",
+        "rainyDays": 3,
+        "description": "Warm and mostly sunny with occasional afternoon showers"
+      },
+      "avgFlightPrice": 180,
       "priceRating": 4,
-      "priceRange": "€150-250",
+      "flightsByCity": {
+        ${uniqueCities.map(c => `"${c}": 150`).join(',\n        ')}
+      },
       "reasoning": "Why this is a good option"
     },
     {
@@ -801,7 +858,7 @@ IMPORTANT: Respond ONLY with valid JSON in this exact format:
   ]
 }
 
-Ratings are 1-5 stars. Price is per person round-trip flight estimate.`;
+Ratings are 1-5 stars. All prices in EUR (€), per person round-trip with checked luggage.`;
     },
 
     /**
@@ -903,7 +960,7 @@ Ratings are 1-5 stars. Price is per person round-trip flight estimate.`;
     },
 
     /**
-     * Parse recommendations from Claude's response
+     * Parse recommendations from AI response
      */
     parseRecommendations(response) {
         try {
@@ -934,34 +991,112 @@ Ratings are 1-5 stars. Price is per person round-trip flight estimate.`;
      * Render results
      */
     renderResults(recommendations) {
+        this.currentRecommendations = recommendations;
         const container = document.getElementById('results-container');
 
-        container.innerHTML = recommendations.map(rec => `
-            <div class="result-card ${rec.rank === 1 ? 'rank-1' : ''}">
-                <div class="result-rank">#${rec.rank} Recommendation</div>
+        container.innerHTML = recommendations.map((rec, idx) => `
+            <div class="result-card ${rec.rank === 1 ? 'rank-1' : ''}" onclick="app.showRecommendationDetail(${idx})">
+                <div class="result-rank">#${rec.rank}</div>
                 <div class="result-destination">${rec.destination}</div>
                 <div class="result-dates">${this.formatDateRange(rec.startDate, rec.endDate)}</div>
 
-                <div class="result-ratings">
-                    <div class="rating-item">
-                        <div class="rating-label">Weather</div>
-                        <div class="rating-value rating-stars">${this.renderStars(rec.weatherRating)}</div>
-                        <div class="rating-label">${rec.weatherDescription || ''}</div>
+                <div class="result-summary">
+                    <div class="summary-item">
+                        <span class="summary-icon">✈️</span>
+                        <span class="summary-value">~€${rec.avgFlightPrice || 'N/A'}</span>
                     </div>
-                    <div class="rating-item">
-                        <div class="rating-label">Price</div>
-                        <div class="rating-value rating-stars">${this.renderStars(rec.priceRating)}</div>
+                    <div class="summary-item">
+                        <span class="summary-icon">☀️</span>
+                        <span class="summary-value">${this.renderStars(rec.weatherRating)}</span>
                     </div>
                 </div>
 
-                <div class="result-price">
-                    <span class="price-label">Est. flight price (pp)</span>
-                    <span class="price-value">${rec.priceRange}</span>
-                </div>
-
-                <div class="result-reasoning">${rec.reasoning}</div>
+                <div class="result-tap-hint">Tap for details</div>
             </div>
         `).join('');
+    },
+
+    /**
+     * Show recommendation detail popup
+     */
+    showRecommendationDetail(index) {
+        const rec = this.currentRecommendations[index];
+        if (!rec) return;
+
+        const content = document.getElementById('recommendation-detail-content');
+
+        // Build flight prices by city HTML
+        let flightsByCityHtml = '';
+        if (rec.flightsByCity) {
+            flightsByCityHtml = Object.entries(rec.flightsByCity).map(([city, price]) => `
+                <div class="detail-flight-row">
+                    <span class="detail-flight-city">${city}</span>
+                    <span class="detail-flight-price">€${price}</span>
+                </div>
+            `).join('');
+        }
+
+        // Build weather details HTML
+        const weather = rec.weatherDetails || {};
+        const weatherHtml = `
+            <div class="detail-weather-info">
+                <div class="detail-weather-row">
+                    <span class="detail-weather-label">Temperature</span>
+                    <span class="detail-weather-value">${weather.tempRange || 'N/A'}</span>
+                </div>
+                <div class="detail-weather-row">
+                    <span class="detail-weather-label">Rainy days</span>
+                    <span class="detail-weather-value">${weather.rainyDays !== undefined ? weather.rainyDays + ' days' : 'N/A'}</span>
+                </div>
+                <div class="detail-weather-description">${weather.description || rec.weatherSummary || ''}</div>
+            </div>
+        `;
+
+        content.innerHTML = `
+            <div class="detail-header">
+                <div class="detail-rank">#${rec.rank} Recommendation</div>
+                <h3 class="detail-destination">${rec.destination}</h3>
+                <div class="detail-dates">${this.formatDateRange(rec.startDate, rec.endDate)}</div>
+            </div>
+
+            <div class="detail-section">
+                <h4>✈️ Flight Prices</h4>
+                <div class="detail-flights">
+                    ${flightsByCityHtml || '<p>No flight data available</p>'}
+                    <div class="detail-flight-avg">
+                        <span>Average</span>
+                        <span>€${rec.avgFlightPrice || 'N/A'}</span>
+                    </div>
+                </div>
+                <div class="detail-rating">
+                    <span>Price rating:</span>
+                    <span class="rating-stars">${this.renderStars(rec.priceRating)}</span>
+                </div>
+            </div>
+
+            <div class="detail-section">
+                <h4>☀️ Weather</h4>
+                ${weatherHtml}
+                <div class="detail-rating">
+                    <span>Weather rating:</span>
+                    <span class="rating-stars">${this.renderStars(rec.weatherRating)}</span>
+                </div>
+            </div>
+
+            <div class="detail-section">
+                <h4>💡 Why this option?</h4>
+                <p class="detail-reasoning">${rec.reasoning}</p>
+            </div>
+        `;
+
+        document.getElementById('recommendation-detail').classList.add('active');
+    },
+
+    /**
+     * Close recommendation detail popup
+     */
+    closeRecommendationDetail() {
+        document.getElementById('recommendation-detail').classList.remove('active');
     },
 
     /**
