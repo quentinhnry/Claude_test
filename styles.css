@@ -391,29 +391,32 @@ body {
 }
 
 /* Duration Inputs */
-.duration-inputs {
+.duration-inline {
     display: flex;
-    flex-direction: column;
-    gap: 20px;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
     margin-bottom: 24px;
+    flex-wrap: wrap;
 }
 
-.duration-inputs .form-group {
-    margin-bottom: 0;
-}
-
-.duration-inputs input[type="number"] {
-    width: 100%;
-    padding: 14px 16px;
+.duration-inline input[type="number"] {
+    width: 70px;
+    padding: 14px 8px;
     border: 2px solid var(--border);
     border-radius: 12px;
     font-size: 1.25rem;
     text-align: center;
 }
 
-.duration-inputs input[type="number"]:focus {
+.duration-inline input[type="number"]:focus {
     outline: none;
     border-color: var(--primary);
+}
+
+.duration-label {
+    font-size: 1rem;
+    color: var(--text);
 }
 
 /* Destinations */
@@ -816,6 +819,30 @@ body {
     color: var(--text-light);
     line-height: 1.6;
     font-size: 0.9rem;
+}
+
+.detail-comparison {
+    text-align: center;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    margin-top: 8px;
+}
+
+.detail-comparison.price-lower {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.detail-comparison.price-typical {
+    background: #f1f5f9;
+    color: #475569;
+}
+
+.detail-comparison.price-higher {
+    background: #fee2e2;
+    color: #991b1b;
 }
 
 /* Trip List */
