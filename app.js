@@ -841,6 +841,14 @@ const app = {
 
         return `You are a travel planning assistant. Analyze the following trip details and recommend the TOP 3 best combinations of dates and destinations.
 
+CRITICAL INSTRUCTIONS FOR FLIGHT PRICES:
+1. You MUST use Google Search to find CURRENT flight prices - do NOT estimate or use training data
+2. For EACH flight price, cite the source where you found it
+3. If you cannot find a specific price via search, write "Price not found" instead of estimating
+4. Prices must reflect ACTUAL current rates found in your search results
+
+For weather data, you may use general knowledge (historical patterns are stable).
+
 TRIP: "${trip.name}"
 PARTICIPANTS: ${trip.participants.map(p => p.name).join(', ')}
 
@@ -858,8 +866,15 @@ MAX TRIP LENGTH: ${maxTripLength} days
 
 For each recommendation, provide:
 1. WEATHER: Rate the weather quality for tourism (best combo of temperature + low rain). Provide average min/max temperatures and average rainy days per month for that period.
-2. FLIGHT PRICES: Estimate round-trip prices WITH checked luggage from EACH departure city. Compare to yearly average: is this period "lower", "typical", or "higher" than usual (like Google Flights)?
+2. FLIGHT PRICES: Search for round-trip prices WITH checked luggage from EACH departure city. Compare to yearly average: is this period "lower", "typical", or "higher" than usual (like Google Flights)?
 3. Trip must fit within ${maxTripLength} days maximum.
+
+IMPORTANT: Each recommendation should have DIFFERENT date ranges:
+- Rec 1: Optimize for BEST WEATHER at that destination
+- Rec 2: Optimize for LOWEST FLIGHT PRICES to that destination
+- Rec 3: Optimize for BEST VALUE (weather + price balance)
+
+Do NOT return identical dates for all 3 recommendations.
 
 IMPORTANT: Respond ONLY with valid JSON in this exact format (no markdown, no code blocks):
 {
@@ -881,7 +896,7 @@ IMPORTANT: Respond ONLY with valid JSON in this exact format (no markdown, no co
       "avgFlightPrice": 180,
       "priceComparison": "lower",
       "flightsByCity": {
-        ${uniqueCities.map(c => `"${c}": 150`).join(',\n        ')}
+        ${uniqueCities.map(c => `"${c}": {"price": 150, "source": "Google Flights", "confidence": "verified"}`).join(',\n        ')}
       },
       "reasoning": "Why this is a good option"
     },
@@ -900,7 +915,8 @@ IMPORTANT: Respond ONLY with valid JSON in this exact format (no markdown, no co
 - priceComparison: "lower" / "typical" / "higher" compared to yearly average
 - All prices in EUR (€), per person round-trip with checked luggage
 - avgMinTemp/avgMaxTemp in Celsius
-- avgRainyDaysPerMonth: average number of rainy days per month during the trip period`;
+- avgRainyDaysPerMonth: average number of rainy days per month during the trip period
+- confidence: "verified" if found via search, "estimated" if not found`;
     },
 
     /**
@@ -1095,12 +1111,17 @@ IMPORTANT: Respond ONLY with valid JSON in this exact format (no markdown, no co
         // Build flight prices by city HTML
         let flightsByCityHtml = '';
         if (rec.flightsByCity) {
-            flightsByCityHtml = Object.entries(rec.flightsByCity).map(([city, price]) => `
-                <div class="detail-flight-row">
-                    <span class="detail-flight-city">${city}</span>
-                    <span class="detail-flight-price">€${price}</span>
-                </div>
-            `).join('');
+            flightsByCityHtml = Object.entries(rec.flightsByCity).map(([city, data]) => {
+                // Handle both old format (number) and new format (object)
+                const price = typeof data === 'object' ? data.price : data;
+                const source = typeof data === 'object' ? data.source : null;
+                return `
+                    <div class="detail-flight-row">
+                        <span class="detail-flight-city">${city}</span>
+                        <span class="detail-flight-price">€${price}${source ? ` <span class="flight-source">(${source})</span>` : ''}</span>
+                    </div>
+                `;
+            }).join('');
         }
 
         // Price comparison badge
