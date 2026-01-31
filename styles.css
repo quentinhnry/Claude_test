@@ -766,6 +766,12 @@ body {
     font-weight: 600;
 }
 
+.flight-source {
+    font-size: 0.75rem;
+    color: var(--text-light);
+    font-weight: normal;
+}
+
 .detail-flight-avg {
     display: flex;
     justify-content: space-between;
