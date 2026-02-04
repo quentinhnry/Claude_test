@@ -14,11 +14,34 @@ const app = {
     screenHistory: [],
     isJoining: false,
     currentRecommendations: [],
+    theme: localStorage.getItem('tripsync_theme') || 'system',
+    selectedInterests: [],
+    votingOrder: [],
+    interestOptions: [
+        { id: 'beach', icon: '🏖️', label: 'Beach & Sun' },
+        { id: 'culture', icon: '🏛️', label: 'Culture & History' },
+        { id: 'adventure', icon: '🏔️', label: 'Adventure' },
+        { id: 'food', icon: '🍽️', label: 'Food & Dining' },
+        { id: 'nightlife', icon: '🎉', label: 'Nightlife' },
+        { id: 'nature', icon: '🌲', label: 'Nature & Wildlife' },
+        { id: 'shopping', icon: '🛍️', label: 'Shopping' },
+        { id: 'relaxation', icon: '🧘', label: 'Relaxation & Spa' }
+    ],
 
     /**
      * Initialize the app
      */
     init() {
+        // Apply theme
+        this.applyTheme();
+
+        // Register service worker for PWA
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js')
+                .then(reg => console.log('SW registered:', reg.scope))
+                .catch(err => console.log('SW registration failed:', err));
+        }
+
         // Check for trip data in URL
         const tripFromUrl = TripState.decode();
         if (tripFromUrl) {
@@ -36,6 +59,39 @@ const app = {
 
         // Load trip history
         this.renderTripHistory();
+    },
+
+    /**
+     * Apply current theme
+     */
+    applyTheme() {
+        if (this.theme === 'system') {
+            document.documentElement.removeAttribute('data-theme');
+        } else {
+            document.documentElement.setAttribute('data-theme', this.theme);
+        }
+        this.updateThemeIcon();
+    },
+
+    /**
+     * Toggle between light, dark, and system themes
+     */
+    toggleTheme() {
+        const themes = ['light', 'dark', 'system'];
+        const currentIdx = themes.indexOf(this.theme);
+        this.theme = themes[(currentIdx + 1) % 3];
+        localStorage.setItem('tripsync_theme', this.theme);
+        this.applyTheme();
+    },
+
+    /**
+     * Update theme icon based on current theme
+     */
+    updateThemeIcon() {
+        const icon = document.getElementById('theme-icon');
+        if (!icon) return;
+        const icons = { light: '☀️', dark: '🌙', system: '💻' };
+        icon.textContent = icons[this.theme];
     },
 
     /**
@@ -462,12 +518,11 @@ const app = {
      */
     loadDepartureCityDefault() {
         const participant = TripState.getParticipant(this.currentTrip, this.currentTrip.currentUser);
-        const input = document.getElementById('departure-city');
-        if (participant && participant.departureCity) {
-            input.value = participant.departureCity;
-        } else {
-            input.value = '';
-        }
+        const cityInput = document.getElementById('departure-city');
+        const nationalityInput = document.getElementById('nationality');
+
+        cityInput.value = participant?.departureCity || '';
+        nationalityInput.value = participant?.nationality || '';
     },
 
     /**
@@ -475,25 +530,253 @@ const app = {
      */
     confirmDepartureCity() {
         const departureCity = document.getElementById('departure-city').value.trim();
+        const nationality = document.getElementById('nationality').value.trim();
 
         if (!departureCity) {
             alert('Please enter your departure city');
             return;
         }
 
-        // Save departure city and mark as completed
+        // Save departure city and nationality (not completed yet - need interests)
         TripState.updateParticipant(this.currentTrip, this.currentTrip.currentUser, {
             departureCity: departureCity,
+            nationality: nationality || null
+        });
+
+        // Go to interests screen
+        this.showScreen('interests');
+        this.loadInterestsDefaults();
+    },
+
+    /**
+     * Load interests defaults from participant data
+     */
+    loadInterestsDefaults() {
+        const participant = TripState.getParticipant(this.currentTrip, this.currentTrip.currentUser);
+        this.selectedInterests = participant?.interests ? [...participant.interests] : [];
+        this.renderInterestsGrid();
+    },
+
+    /**
+     * Render the interests grid
+     */
+    renderInterestsGrid() {
+        const grid = document.getElementById('interests-grid');
+        grid.innerHTML = this.interestOptions.map(opt => `
+            <div class="interest-item ${this.selectedInterests.includes(opt.id) ? 'selected' : ''}"
+                 onclick="app.toggleInterest('${opt.id}')">
+                <span class="interest-icon">${opt.icon}</span>
+                <span class="interest-label">${opt.label}</span>
+            </div>
+        `).join('');
+    },
+
+    /**
+     * Toggle an interest selection
+     */
+    toggleInterest(id) {
+        const idx = this.selectedInterests.indexOf(id);
+        if (idx >= 0) {
+            this.selectedInterests.splice(idx, 1);
+        } else {
+            this.selectedInterests.push(id);
+        }
+        this.renderInterestsGrid();
+    },
+
+    /**
+     * Confirm interests selection
+     */
+    confirmInterests() {
+        // Save interests (not completed yet if voting needed)
+        TripState.updateParticipant(this.currentTrip, this.currentTrip.currentUser, {
+            interests: [...this.selectedInterests]
+        });
+
+        // If destinations exist and we're joining, go to voting
+        if (this.currentTrip.destinations.length > 1 && this.isJoining) {
+            this.showScreen('voting');
+            this.renderVotingList();
+        } else if (!this.isJoining && this.currentTrip.destinations.length === 0) {
+            // Owner needs to set destinations first, mark completed
+            TripState.updateParticipant(this.currentTrip, this.currentTrip.currentUser, {
+                completed: true
+            });
+            this.showScreen('destinations');
+        } else {
+            // Mark as completed and go to waiting
+            TripState.updateParticipant(this.currentTrip, this.currentTrip.currentUser, {
+                completed: true
+            });
+            this.saveAndShowWaiting();
+        }
+    },
+
+    /**
+     * Render the voting list
+     */
+    renderVotingList() {
+        // Initialize order from destinations
+        this.votingOrder = this.currentTrip.destinations.map(d => d.id);
+
+        // Check for existing votes and sort by them
+        const participant = TripState.getParticipant(this.currentTrip, this.currentTrip.currentUser);
+        if (participant) {
+            const existingVotes = {};
+            this.currentTrip.destinations.forEach(d => {
+                if (d.votes && d.votes[this.currentTrip.currentUser]) {
+                    existingVotes[d.id] = d.votes[this.currentTrip.currentUser];
+                }
+            });
+            if (Object.keys(existingVotes).length > 0) {
+                this.votingOrder.sort((a, b) => (existingVotes[a] || 99) - (existingVotes[b] || 99));
+            }
+        }
+
+        this.renderVotingItems();
+        this.initDragAndDrop();
+    },
+
+    /**
+     * Render voting items
+     */
+    renderVotingItems() {
+        const list = document.getElementById('voting-list');
+        list.innerHTML = this.votingOrder.map((destId, idx) => {
+            const dest = this.currentTrip.destinations.find(d => d.id === destId);
+            return `
+                <div class="voting-item" data-id="${destId}" draggable="true">
+                    <span class="voting-rank">${idx + 1}</span>
+                    <span class="voting-destination">${dest.countries.join(', ')}</span>
+                    <span class="voting-drag-handle">⋮⋮</span>
+                </div>
+            `;
+        }).join('');
+    },
+
+    /**
+     * Initialize drag and drop for voting
+     */
+    initDragAndDrop() {
+        const list = document.getElementById('voting-list');
+        let draggedItem = null;
+
+        list.querySelectorAll('.voting-item').forEach(item => {
+            item.addEventListener('dragstart', (e) => {
+                draggedItem = item;
+                item.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+            });
+
+            item.addEventListener('dragend', () => {
+                item.classList.remove('dragging');
+                draggedItem = null;
+                this.updateVotingOrder();
+            });
+
+            item.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                if (draggedItem && draggedItem !== item) {
+                    const rect = item.getBoundingClientRect();
+                    const midY = rect.top + rect.height / 2;
+                    if (e.clientY < midY) {
+                        list.insertBefore(draggedItem, item);
+                    } else {
+                        list.insertBefore(draggedItem, item.nextSibling);
+                    }
+                }
+            });
+
+            // Touch support
+            item.addEventListener('touchstart', (e) => {
+                draggedItem = item;
+                item.classList.add('dragging');
+            }, { passive: true });
+
+            item.addEventListener('touchend', () => {
+                if (draggedItem) {
+                    draggedItem.classList.remove('dragging');
+                    draggedItem = null;
+                    this.updateVotingOrder();
+                }
+            });
+        });
+    },
+
+    /**
+     * Update voting order after drag
+     */
+    updateVotingOrder() {
+        const items = document.querySelectorAll('.voting-item');
+        this.votingOrder = Array.from(items).map(item => item.dataset.id);
+        this.renderVotingItems();
+        this.initDragAndDrop();
+    },
+
+    /**
+     * Confirm votes
+     */
+    confirmVotes() {
+        // Save votes to destinations
+        this.votingOrder.forEach((destId, idx) => {
+            const dest = this.currentTrip.destinations.find(d => d.id === destId);
+            if (dest) {
+                if (!dest.votes) dest.votes = {};
+                dest.votes[this.currentTrip.currentUser] = idx + 1;
+            }
+        });
+
+        // Mark as completed
+        TripState.updateParticipant(this.currentTrip, this.currentTrip.currentUser, {
             completed: true
         });
 
-        // If owner and not joining, go to destinations
-        if (!this.isJoining && this.currentTrip.destinations.length === 0) {
-            this.showScreen('destinations');
-        } else {
-            // Save and go to waiting
-            this.saveAndShowWaiting();
+        this.saveAndShowWaiting();
+    },
+
+    /**
+     * Render voting results in waiting screen
+     */
+    renderVotingResults() {
+        const container = document.getElementById('voting-results');
+        const list = document.getElementById('voting-results-list');
+
+        if (this.currentTrip.destinations.length < 2) {
+            container.style.display = 'none';
+            return;
         }
+
+        // Check if anyone has voted
+        const hasVotes = this.currentTrip.destinations.some(d => d.votes && Object.keys(d.votes).length > 0);
+        if (!hasVotes) {
+            container.style.display = 'none';
+            return;
+        }
+
+        // Calculate scores (lower avg rank = better)
+        const scores = this.currentTrip.destinations.map(dest => {
+            const votes = dest.votes || {};
+            const voteValues = Object.values(votes);
+            const avgRank = voteValues.length > 0
+                ? voteValues.reduce((a, b) => a + b, 0) / voteValues.length
+                : 99;
+            return {
+                id: dest.id,
+                countries: dest.countries.join(', '),
+                avgRank,
+                voteCount: voteValues.length
+            };
+        }).sort((a, b) => a.avgRank - b.avgRank);
+
+        list.innerHTML = scores.map((s, idx) => `
+            <div class="vote-result-item">
+                <span class="voting-rank">${idx + 1}</span>
+                <span class="voting-destination">${s.countries}</span>
+                <span style="color: var(--text-light); font-size: 0.875rem;">${s.voteCount} vote${s.voteCount !== 1 ? 's' : ''}</span>
+            </div>
+        `).join('');
+
+        container.style.display = 'block';
     },
 
     /**
@@ -677,6 +960,58 @@ const app = {
         } else {
             generateBtn.style.display = 'none';
         }
+
+        // Render voting results if available
+        this.renderVotingResults();
+
+        // Show preferences section if all completed
+        const prefsSection = document.getElementById('preferences-section');
+        if (TripState.allCompleted(this.currentTrip)) {
+            prefsSection.style.display = 'block';
+            const directToggle = document.getElementById('direct-flights-toggle');
+            directToggle.checked = this.currentTrip.preferences?.directFlightsOnly || false;
+        } else {
+            prefsSection.style.display = 'none';
+        }
+    },
+
+    /**
+     * Toggle direct flights preference
+     */
+    toggleDirectFlights() {
+        const checked = document.getElementById('direct-flights-toggle').checked;
+        if (!this.currentTrip.preferences) {
+            this.currentTrip.preferences = {};
+        }
+        this.currentTrip.preferences.directFlightsOnly = checked;
+        TripState.updateUrl(this.currentTrip);
+        TripState.saveToHistory(this.currentTrip);
+    },
+
+    /**
+     * Share trip using native share or copy
+     */
+    async shareTrip() {
+        const shareUrl = document.getElementById('share-url').value;
+        const shareData = {
+            title: `TripSync: ${this.currentTrip.name}`,
+            text: `Join our trip planning for "${this.currentTrip.name}"!`,
+            url: shareUrl
+        };
+
+        // Try native share first
+        if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+            try {
+                await navigator.share(shareData);
+                return;
+            } catch (err) {
+                if (err.name === 'AbortError') return;
+                // Fall through to copy
+            }
+        }
+
+        // Fallback to clipboard copy
+        this.copyShareLink();
     },
 
     /**
@@ -831,13 +1166,50 @@ const app = {
         const departureCitiesText = departureCities.map(d => `- ${d.name}: ${d.city}`).join('\n');
         const uniqueCities = [...new Set(departureCities.map(d => d.city))];
 
-        const destinationOptions = trip.destinations.map((d, i) =>
-            `Option ${i + 1}: ${d.countries.join(', ')}`
-        ).join('\n');
+        // Get nationalities
+        const nationalities = trip.participants
+            .map(p => p.nationality)
+            .filter(n => n)
+            .filter((v, i, a) => a.indexOf(v) === i);
+        const nationalitiesText = nationalities.length > 0
+            ? nationalities.join(', ')
+            : 'Not specified';
+
+        // Get shared interests
+        const allInterests = trip.participants
+            .flatMap(p => p.interests || [])
+            .filter((v, i, a) => a.indexOf(v) === i);
+        const interestsText = allInterests.length > 0
+            ? allInterests.map(id => {
+                const opt = this.interestOptions.find(o => o.id === id);
+                return opt ? opt.label : id;
+            }).join(', ')
+            : 'No specific interests provided';
+
+        // Calculate destination scores from votes
+        const destinationScores = trip.destinations.map(dest => {
+            const votes = dest.votes || {};
+            const voteValues = Object.values(votes);
+            const avgRank = voteValues.length > 0
+                ? voteValues.reduce((a, b) => a + b, 0) / voteValues.length
+                : 99;
+            return { dest, avgRank, voteCount: voteValues.length };
+        }).sort((a, b) => a.avgRank - b.avgRank);
+
+        const hasVotes = destinationScores.some(s => s.voteCount > 0);
+        const destinationOptions = hasVotes
+            ? destinationScores.map((s, i) =>
+                `${i + 1}. ${s.dest.countries.join(', ')} (${s.voteCount} votes, avg rank: ${s.avgRank.toFixed(1)})`
+            ).join('\n')
+            : trip.destinations.map((d, i) =>
+                `Option ${i + 1}: ${d.countries.join(', ')}`
+            ).join('\n');
 
         const rangesText = overlappingRanges.length > 0
             ? overlappingRanges.map(r => `${r.start} to ${r.end} (${r.days} days)`).join('\n')
             : 'No overlapping dates found';
+
+        const directFlightsOnly = trip.preferences?.directFlightsOnly;
 
         return `You are a travel planning assistant. Analyze the following trip details and recommend the TOP 3 best combinations of dates and destinations.
 
@@ -855,6 +1227,12 @@ PARTICIPANTS: ${trip.participants.map(p => p.name).join(', ')}
 DEPARTURE CITIES:
 ${departureCitiesText}
 
+SHARED INTERESTS: ${interestsText}
+Consider these activity preferences when ranking destinations.
+
+PARTICIPANT NATIONALITIES: ${nationalitiesText}
+Include brief visa requirements for these nationalities in recommendations.
+
 DESTINATION OPTIONS:
 ${destinationOptions}
 
@@ -863,11 +1241,12 @@ ${rangesText}
 
 MAX TRIP LENGTH: ${maxTripLength} days
 (This is the strictest constraint across all participants - recommendations MUST NOT exceed this)
-
+${directFlightsOnly ? '\nIMPORTANT: Only consider DIRECT flights. If no direct flights exist for a route, note this limitation.\n' : ''}
 For each recommendation, provide:
 1. WEATHER: Rate the weather quality for tourism (best combo of temperature + low rain). Provide average min/max temperatures and average rainy days per month for that period.
 2. FLIGHT PRICES: Search for round-trip prices WITH checked luggage from EACH departure city. Compare to yearly average: is this period "lower", "typical", or "higher" than usual (like Google Flights)?
-3. Trip must fit within ${maxTripLength} days maximum.
+3. ACCOMMODATION: Estimate nightly rates for budget (hostel/budget hotel), mid-range (3-star), and luxury (4-5 star) options.
+4. Trip must fit within ${maxTripLength} days maximum.
 
 IMPORTANT: Each recommendation should have DIFFERENT date ranges:
 - Rec 1: Optimize for BEST WEATHER at that destination
@@ -898,6 +1277,12 @@ IMPORTANT: Respond ONLY with valid JSON in this exact format (no markdown, no co
       "flightsByCity": {
         ${uniqueCities.map(c => `"${c}": {"price": 150, "source": "Google Flights", "confidence": "verified"}`).join(',\n        ')}
       },
+      "accommodation": {
+        "budget": 30,
+        "midRange": 80,
+        "luxury": 200
+      },
+      "visaInfo": "Brief visa requirements for the nationalities",
       "reasoning": "Why this is a good option"
     },
     {
@@ -1185,6 +1570,33 @@ IMPORTANT: Respond ONLY with valid JSON in this exact format (no markdown, no co
                     <span class="rating-stars">${this.renderStars(rec.weatherRating)}</span>
                 </div>
             </div>
+
+            ${rec.accommodation ? `
+            <div class="detail-section">
+                <h4>🏨 Accommodation (per night)</h4>
+                <div class="detail-accommodation">
+                    <div class="accom-tier">
+                        <span class="accom-label">Budget</span>
+                        <span class="accom-price">€${rec.accommodation.budget}</span>
+                    </div>
+                    <div class="accom-tier">
+                        <span class="accom-label">Mid-range</span>
+                        <span class="accom-price">€${rec.accommodation.midRange}</span>
+                    </div>
+                    <div class="accom-tier">
+                        <span class="accom-label">Luxury</span>
+                        <span class="accom-price">€${rec.accommodation.luxury}</span>
+                    </div>
+                </div>
+            </div>
+            ` : ''}
+
+            ${rec.visaInfo ? `
+            <div class="detail-section">
+                <h4>📋 Visa Requirements</h4>
+                <p class="detail-reasoning">${rec.visaInfo}</p>
+            </div>
+            ` : ''}
 
             <div class="detail-section">
                 <h4>💡 Why this option?</h4>

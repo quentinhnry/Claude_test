@@ -75,6 +75,8 @@ const TripState = {
                 maxDays: null,
                 maxWeeks: null,
                 departureCity: null,
+                nationality: null,
+                interests: [],
                 completed: false
             })),
             destinations: [],

@@ -4,12 +4,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TripSync - Plan Trips Together</title>
+    <!-- PWA Meta Tags -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#6366f1">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="TripSync">
+    <link rel="apple-touch-icon" href="icons/icon-192.svg">
+    <meta name="description" content="Plan trips with friends, effortlessly">
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div id="app">
         <!-- Home Screen -->
         <div id="screen-home" class="screen active">
+            <button class="btn-theme-toggle" onclick="app.toggleTheme()" title="Toggle theme">
+                <span id="theme-icon">🌙</span>
+            </button>
             <div class="container">
                 <div class="logo">
                     <h1>✈️ TripSync</h1>
@@ -143,7 +154,46 @@
                     <input type="text" id="departure-city" placeholder="e.g. Paris, London, Berlin...">
                 </div>
 
+                <div class="form-group">
+                    <label for="nationality">Your nationality (passport country)</label>
+                    <input type="text" id="nationality" placeholder="e.g. France, Germany, USA...">
+                </div>
+
                 <button class="btn btn-primary btn-full" onclick="app.confirmDepartureCity()">Continue</button>
+            </div>
+        </div>
+
+        <!-- Activities/Interests Screen -->
+        <div id="screen-interests" class="screen">
+            <button class="btn-home-icon" onclick="app.goHome()" title="Home">🏠</button>
+            <div class="container">
+                <div class="header">
+                    <button class="btn-back" onclick="app.goBack()">←</button>
+                    <h2>What do you enjoy?</h2>
+                </div>
+
+                <p class="subtitle">Select activities you'd like on this trip</p>
+
+                <div id="interests-grid" class="interests-grid"></div>
+
+                <button class="btn btn-primary btn-full" onclick="app.confirmInterests()">Continue</button>
+            </div>
+        </div>
+
+        <!-- Destination Voting Screen -->
+        <div id="screen-voting" class="screen">
+            <button class="btn-home-icon" onclick="app.goHome()" title="Home">🏠</button>
+            <div class="container">
+                <div class="header">
+                    <button class="btn-back" onclick="app.goBack()">←</button>
+                    <h2>Rank Destinations</h2>
+                </div>
+
+                <p class="subtitle">Drag to reorder by preference (top = favorite)</p>
+
+                <div id="voting-list" class="voting-list"></div>
+
+                <button class="btn btn-primary btn-full" onclick="app.confirmVotes()">Submit Votes</button>
             </div>
         </div>
 
@@ -176,10 +226,23 @@
 
                 <div class="share-link">
                     <input type="text" id="share-url" readonly>
-                    <button class="btn btn-secondary" onclick="app.copyShareLink()">Copy</button>
+                    <button class="btn btn-secondary" onclick="app.shareTrip()">Share</button>
                 </div>
 
                 <div id="participants-status" class="participants-status"></div>
+
+                <div id="voting-results" class="voting-results" style="display: none;">
+                    <h4>🗳️ Destination Rankings</h4>
+                    <div id="voting-results-list"></div>
+                </div>
+
+                <div class="preferences-section" id="preferences-section" style="display: none;">
+                    <label class="toggle-container">
+                        <input type="checkbox" id="direct-flights-toggle" onchange="app.toggleDirectFlights()">
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label">Prefer direct flights only</span>
+                    </label>
+                </div>
 
                 <button id="btn-generate" class="btn btn-primary btn-full" onclick="app.generateRecommendations()" style="display: none">
                     Generate Recommendations
