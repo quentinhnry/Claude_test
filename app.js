@@ -15,6 +15,9 @@ const app = {
     isJoining: false,
     currentRecommendations: [],
     currentDetailIndex: null,
+    compareSelection: [],
+    syncInterval: null,
+    lastSyncHash: null,
     theme: localStorage.getItem('tripsync_theme') || 'system',
     currency: localStorage.getItem('tripsync_currency') || 'EUR',
     exchangeRates: { EUR: 1, USD: 1.08, GBP: 0.85 },
@@ -122,6 +125,11 @@ const app = {
      * Show a specific screen
      */
     showScreen(screenId) {
+        // Stop sync when leaving waiting screen
+        if (this.currentScreen === 'waiting' && screenId !== 'waiting') {
+            this.stopSync();
+        }
+
         // Hide all screens
         document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
 
@@ -142,6 +150,7 @@ const app = {
             this.renderCalendar();
         } else if (screenId === 'waiting') {
             this.renderWaitingScreen();
+            this.startSync();
         } else if (screenId === 'destinations') {
             this.renderDestinations();
         }
@@ -1530,10 +1539,12 @@ IMPORTANT: Respond ONLY with valid JSON in this exact format (no markdown, no co
      */
     renderResults(recommendations) {
         this.currentRecommendations = recommendations;
+        this.compareSelection = [];
         const container = document.getElementById('results-container');
 
         container.innerHTML = recommendations.map((rec, idx) => `
-            <div class="result-card ${rec.rank === 1 ? 'rank-1' : ''}" onclick="app.showRecommendationDetail(${idx})">
+            <div class="result-card ${rec.rank === 1 ? 'rank-1' : ''} ${this.compareSelection.includes(idx) ? 'compare-selected' : ''}" onclick="app.showRecommendationDetail(${idx})">
+                <div class="compare-checkbox" onclick="event.stopPropagation(); app.toggleCompare(${idx})"></div>
                 <div class="result-rank">#${rec.rank}</div>
                 <div class="result-destination">${rec.destination}</div>
                 <div class="result-dates">${this.formatDateRange(rec.startDate, rec.endDate)}</div>
@@ -1541,7 +1552,7 @@ IMPORTANT: Respond ONLY with valid JSON in this exact format (no markdown, no co
                 <div class="result-summary">
                     <div class="summary-item">
                         <span class="summary-icon">✈️</span>
-                        <span class="summary-value">~€${rec.avgFlightPrice || 'N/A'}</span>
+                        <span class="summary-value">~${this.formatPrice(rec.avgFlightPrice)}</span>
                     </div>
                     <div class="summary-item">
                         <span class="summary-icon">☀️</span>
@@ -1552,6 +1563,108 @@ IMPORTANT: Respond ONLY with valid JSON in this exact format (no markdown, no co
                 <div class="result-tap-hint">Tap for details</div>
             </div>
         `).join('');
+
+        this.updateCompareUI();
+    },
+
+    /**
+     * Toggle compare selection
+     */
+    toggleCompare(index) {
+        const idx = this.compareSelection.indexOf(index);
+        if (idx >= 0) {
+            this.compareSelection.splice(idx, 1);
+        } else if (this.compareSelection.length < 3) {
+            this.compareSelection.push(index);
+        }
+        this.updateCompareUI();
+    },
+
+    /**
+     * Update compare UI
+     */
+    updateCompareUI() {
+        const controls = document.getElementById('compare-controls');
+        const count = document.getElementById('compare-count');
+
+        if (this.compareSelection.length > 0) {
+            controls.style.display = 'flex';
+            count.textContent = `${this.compareSelection.length} selected`;
+        } else {
+            controls.style.display = 'none';
+        }
+
+        document.querySelectorAll('.result-card').forEach((card, idx) => {
+            const checkbox = card.querySelector('.compare-checkbox');
+            const isSelected = this.compareSelection.includes(idx);
+            card.classList.toggle('compare-selected', isSelected);
+            if (checkbox) {
+                checkbox.classList.toggle('checked', isSelected);
+                checkbox.textContent = isSelected ? '✓' : '';
+            }
+        });
+    },
+
+    /**
+     * Clear compare selection
+     */
+    clearCompare() {
+        this.compareSelection = [];
+        this.updateCompareUI();
+    },
+
+    /**
+     * Show compare view
+     */
+    showCompareView() {
+        if (this.compareSelection.length < 2) {
+            alert('Select at least 2 recommendations to compare');
+            return;
+        }
+
+        const selected = this.compareSelection.map(i => this.currentRecommendations[i]);
+        const container = document.getElementById('compare-table-container');
+
+        const bestFlight = Math.min(...selected.map(r => r.avgFlightPrice || Infinity));
+        const bestWeather = Math.max(...selected.map(r => r.weatherRating || 0));
+
+        container.innerHTML = `
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th></th>
+                        ${selected.map(r => `<th>#${r.rank} ${r.destination}</th>`).join('')}
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <th>Dates</th>
+                        ${selected.map(r => `<td>${this.formatDateRange(r.startDate, r.endDate)}</td>`).join('')}
+                    </tr>
+                    <tr>
+                        <th>Flight</th>
+                        ${selected.map(r => `<td class="${r.avgFlightPrice === bestFlight ? 'compare-highlight' : ''}">${this.formatPrice(r.avgFlightPrice)}</td>`).join('')}
+                    </tr>
+                    <tr>
+                        <th>Weather</th>
+                        ${selected.map(r => `<td class="${r.weatherRating === bestWeather ? 'compare-highlight' : ''}">${this.renderStars(r.weatherRating)}</td>`).join('')}
+                    </tr>
+                    <tr>
+                        <th>Price Level</th>
+                        ${selected.map(r => `<td>${r.priceComparison || 'N/A'}</td>`).join('')}
+                    </tr>
+                </tbody>
+            </table>
+        `;
+
+        document.getElementById('compare-dialog').classList.add('active');
+    },
+
+    /**
+     * Close compare view
+     */
+    closeCompareView() {
+        document.getElementById('compare-dialog').classList.remove('active');
     },
 
     /**
@@ -1748,6 +1861,158 @@ IMPORTANT: Respond ONLY with valid JSON in this exact format (no markdown, no co
      */
     hideLoading() {
         document.getElementById('loading-overlay').classList.remove('active');
+    },
+
+    /**
+     * Start real-time sync for multi-tab updates
+     */
+    startSync() {
+        if (!this.currentTrip) return;
+
+        // Store initial hash
+        this.lastSyncHash = this.getTripHash();
+
+        // Listen for storage events (other tabs)
+        window.addEventListener('storage', this.handleStorageEvent.bind(this));
+
+        // Poll every 30 seconds for URL changes (when user manually syncs)
+        this.syncInterval = setInterval(() => this.checkForUpdates(), 30000);
+    },
+
+    /**
+     * Stop sync
+     */
+    stopSync() {
+        window.removeEventListener('storage', this.handleStorageEvent.bind(this));
+        if (this.syncInterval) {
+            clearInterval(this.syncInterval);
+            this.syncInterval = null;
+        }
+    },
+
+    /**
+     * Handle storage event from other tabs
+     */
+    handleStorageEvent(event) {
+        if (event.key === 'tripsync_history' && this.currentTrip) {
+            this.checkForUpdates();
+        }
+    },
+
+    /**
+     * Check for trip updates
+     */
+    checkForUpdates() {
+        if (!this.currentTrip) return;
+
+        const history = TripState.getHistory();
+        const savedTrip = history.find(t => t.id === this.currentTrip.id);
+
+        if (savedTrip) {
+            const newHash = this.getTripHash(savedTrip);
+            if (newHash !== this.lastSyncHash) {
+                // Merge updates
+                this.currentTrip = TripState.merge(this.currentTrip, savedTrip);
+                this.lastSyncHash = newHash;
+
+                // Update UI if on waiting screen
+                if (this.currentScreen === 'waiting') {
+                    this.renderWaitingScreen();
+                    this.showSyncToast('Trip updated from another session');
+                }
+            }
+        }
+    },
+
+    /**
+     * Get hash of trip for change detection
+     */
+    getTripHash(trip = this.currentTrip) {
+        if (!trip) return '';
+        const relevant = {
+            participants: trip.participants.map(p => ({
+                name: p.name,
+                completed: p.completed,
+                availableRanges: p.availableRanges
+            })),
+            destinations: trip.destinations
+        };
+        return JSON.stringify(relevant);
+    },
+
+    /**
+     * Show sync toast notification
+     */
+    showSyncToast(message) {
+        // Remove existing toast
+        const existing = document.querySelector('.sync-toast');
+        if (existing) existing.remove();
+
+        const toast = document.createElement('div');
+        toast.className = 'sync-toast';
+        toast.textContent = message;
+        document.body.appendChild(toast);
+
+        // Trigger animation
+        setTimeout(() => toast.classList.add('show'), 10);
+
+        // Remove after 3 seconds
+        setTimeout(() => {
+            toast.classList.remove('show');
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+    },
+
+    /**
+     * Export trip as PDF (using print)
+     */
+    exportPDF() {
+        if (!this.currentRecommendations || this.currentRecommendations.length === 0) {
+            alert('No recommendations to export');
+            return;
+        }
+
+        // Create print container
+        const printContainer = document.createElement('div');
+        printContainer.className = 'print-container';
+
+        printContainer.innerHTML = `
+            <div class="print-header">
+                <h1>✈️ ${this.currentTrip.name}</h1>
+                <p>Generated by TripSync</p>
+            </div>
+
+            <div class="print-section">
+                <h2>Participants</h2>
+                <ul>
+                    ${this.currentTrip.participants.map(p => `
+                        <li>${p.name} - from ${p.departureCity || 'N/A'}</li>
+                    `).join('')}
+                </ul>
+            </div>
+
+            <div class="print-section">
+                <h2>Recommendations</h2>
+                ${this.currentRecommendations.map(rec => `
+                    <div class="print-recommendation">
+                        <h3>#${rec.rank} ${rec.destination}</h3>
+                        <p><strong>Dates:</strong> ${this.formatDateRange(rec.startDate, rec.endDate)}</p>
+                        <p><strong>Avg. Flight:</strong> €${rec.avgFlightPrice || 'N/A'}</p>
+                        <p><strong>Weather:</strong> ${this.renderStars(rec.weatherRating)} - ${rec.weatherSummary || ''}</p>
+                        ${rec.accommodation ? `
+                            <p><strong>Accommodation:</strong> Budget €${rec.accommodation.budget}/night, Mid-range €${rec.accommodation.midRange}/night</p>
+                        ` : ''}
+                        ${rec.visaInfo ? `<p><strong>Visa:</strong> ${rec.visaInfo}</p>` : ''}
+                        <p><strong>Why:</strong> ${rec.reasoning}</p>
+                        ${rec.notes ? `<p><strong>Notes:</strong> ${rec.notes}</p>` : ''}
+                    </div>
+                `).join('')}
+            </div>
+        `;
+
+        document.body.appendChild(printContainer);
+        window.print();
+        document.body.removeChild(printContainer);
     }
 };
 

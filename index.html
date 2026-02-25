@@ -278,11 +278,31 @@
                     </select>
                 </div>
 
+                <div id="compare-controls" class="compare-controls" style="display: none;">
+                    <span id="compare-count">0 selected</span>
+                    <button class="btn btn-primary btn-sm" onclick="app.showCompareView()">Compare</button>
+                    <button class="btn btn-text btn-sm" onclick="app.clearCompare()">Clear</button>
+                </div>
+
                 <div id="results-container" class="results-container"></div>
 
-                <button class="btn btn-secondary btn-full" onclick="app.regenerate()">
-                    🔄 Regenerate
-                </button>
+                <div class="results-actions">
+                    <button class="btn btn-secondary btn-full" onclick="app.regenerate()">
+                        🔄 Regenerate
+                    </button>
+                    <button class="btn btn-text btn-full" onclick="app.exportPDF()">
+                        📄 Export PDF
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Compare Dialog -->
+        <div id="compare-dialog" class="dialog-overlay">
+            <div class="dialog dialog-wide">
+                <button class="dialog-close" onclick="app.closeCompareView()">×</button>
+                <h3>Compare Recommendations</h3>
+                <div id="compare-table-container" class="compare-table-container"></div>
             </div>
         </div>
 
