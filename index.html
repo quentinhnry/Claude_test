@@ -236,6 +236,14 @@
                     <div id="voting-results-list"></div>
                 </div>
 
+                <div id="date-flexibility" class="date-flexibility" style="display: none;">
+                    <h4>📅 Date Flexibility</h4>
+                    <div class="flexibility-meter">
+                        <div class="flexibility-bar" id="flexibility-bar"></div>
+                    </div>
+                    <p class="flexibility-text" id="flexibility-text"></p>
+                </div>
+
                 <div class="preferences-section" id="preferences-section" style="display: none;">
                     <label class="toggle-container">
                         <input type="checkbox" id="direct-flights-toggle" onchange="app.toggleDirectFlights()">
@@ -260,6 +268,15 @@
                 </div>
 
                 <p class="subtitle">Tap a recommendation for details</p>
+
+                <div class="currency-selector">
+                    <label for="currency-select">Currency:</label>
+                    <select id="currency-select" onchange="app.setCurrency(this.value)">
+                        <option value="EUR">EUR (€)</option>
+                        <option value="USD">USD ($)</option>
+                        <option value="GBP">GBP (£)</option>
+                    </select>
+                </div>
 
                 <div id="results-container" class="results-container"></div>
 

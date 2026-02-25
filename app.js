@@ -14,7 +14,11 @@ const app = {
     screenHistory: [],
     isJoining: false,
     currentRecommendations: [],
+    currentDetailIndex: null,
     theme: localStorage.getItem('tripsync_theme') || 'system',
+    currency: localStorage.getItem('tripsync_currency') || 'EUR',
+    exchangeRates: { EUR: 1, USD: 1.08, GBP: 0.85 },
+    currencySymbols: { EUR: '€', USD: '$', GBP: '£' },
     selectedInterests: [],
     votingOrder: [],
     interestOptions: [
@@ -92,6 +96,26 @@ const app = {
         if (!icon) return;
         const icons = { light: '☀️', dark: '🌙', system: '💻' };
         icon.textContent = icons[this.theme];
+    },
+
+    /**
+     * Set currency and re-render results
+     */
+    setCurrency(currency) {
+        this.currency = currency;
+        localStorage.setItem('tripsync_currency', currency);
+        if (this.currentScreen === 'results' && this.currentRecommendations.length > 0) {
+            this.renderResults(this.currentRecommendations);
+        }
+    },
+
+    /**
+     * Format price in current currency
+     */
+    formatPrice(eurAmount) {
+        if (!eurAmount || isNaN(eurAmount)) return 'N/A';
+        const converted = Math.round(eurAmount * this.exchangeRates[this.currency]);
+        return `${this.currencySymbols[this.currency]}${converted}`;
     },
 
     /**
@@ -964,6 +988,9 @@ const app = {
         // Render voting results if available
         this.renderVotingResults();
 
+        // Render date flexibility meter
+        this.renderDateFlexibility();
+
         // Show preferences section if all completed
         const prefsSection = document.getElementById('preferences-section');
         if (TripState.allCompleted(this.currentTrip)) {
@@ -973,6 +1000,49 @@ const app = {
         } else {
             prefsSection.style.display = 'none';
         }
+    },
+
+    /**
+     * Render date flexibility meter
+     */
+    renderDateFlexibility() {
+        const container = document.getElementById('date-flexibility');
+        const bar = document.getElementById('flexibility-bar');
+        const text = document.getElementById('flexibility-text');
+
+        if (!TripState.allCompleted(this.currentTrip)) {
+            container.style.display = 'none';
+            return;
+        }
+
+        const overlapping = this.findOverlappingRanges(this.currentTrip.participants);
+        const totalDays = overlapping.reduce((sum, r) => sum + r.days, 0);
+        const maxDays = Math.min(...this.currentTrip.participants.map(p => p.maxDays || 14));
+
+        let score, label, className;
+
+        if (totalDays < maxDays) {
+            score = 15;
+            label = `Only ${totalDays} overlapping days - very tight!`;
+            className = 'tight';
+        } else if (totalDays < maxDays * 2) {
+            score = 35;
+            label = `${totalDays} days available - limited flexibility`;
+            className = 'tight';
+        } else if (totalDays < maxDays * 4) {
+            score = 60;
+            label = `${totalDays} days available - moderate flexibility`;
+            className = 'moderate';
+        } else {
+            score = 90;
+            label = `${totalDays} days available - very flexible!`;
+            className = 'flexible';
+        }
+
+        bar.style.width = `${score}%`;
+        bar.className = `flexibility-bar ${className}`;
+        text.textContent = label;
+        container.style.display = 'block';
     },
 
     /**
@@ -1602,8 +1672,16 @@ IMPORTANT: Respond ONLY with valid JSON in this exact format (no markdown, no co
                 <h4>💡 Why this option?</h4>
                 <p class="detail-reasoning">${rec.reasoning}</p>
             </div>
+
+            <div class="detail-section">
+                <h4>📝 Notes</h4>
+                <textarea id="recommendation-notes" class="notes-textarea"
+                          placeholder="Add your notes about this option..."
+                          oninput="app.saveRecommendationNotes(this.value)">${rec.notes || ''}</textarea>
+            </div>
         `;
 
+        this.currentDetailIndex = index;
         document.getElementById('recommendation-detail').classList.add('active');
     },
 
@@ -1611,7 +1689,20 @@ IMPORTANT: Respond ONLY with valid JSON in this exact format (no markdown, no co
      * Close recommendation detail popup
      */
     closeRecommendationDetail() {
+        this.currentDetailIndex = null;
         document.getElementById('recommendation-detail').classList.remove('active');
+    },
+
+    /**
+     * Save notes for current recommendation
+     */
+    saveRecommendationNotes(text) {
+        if (this.currentDetailIndex !== null) {
+            this.currentRecommendations[this.currentDetailIndex].notes = text;
+            this.currentTrip.recommendations = this.currentRecommendations;
+            TripState.saveToHistory(this.currentTrip);
+            TripState.updateUrl(this.currentTrip);
+        }
     },
 
     /**

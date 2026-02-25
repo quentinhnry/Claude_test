@@ -531,6 +531,45 @@ body {
     font-size: 1.25rem;
 }
 
+/* Date Flexibility Meter */
+.date-flexibility {
+    width: 100%;
+    max-width: 400px;
+    margin: 16px 0;
+    padding: 16px;
+    background: var(--card-bg);
+    border-radius: 12px;
+}
+
+.date-flexibility h4 {
+    font-size: 0.9rem;
+    margin-bottom: 12px;
+}
+
+.flexibility-meter {
+    height: 12px;
+    background: var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+.flexibility-bar {
+    height: 100%;
+    border-radius: 6px;
+    transition: width 0.5s, background-color 0.3s;
+}
+
+.flexibility-bar.tight { background: var(--danger); }
+.flexibility-bar.moderate { background: var(--warning); }
+.flexibility-bar.flexible { background: var(--success); }
+
+.flexibility-text {
+    font-size: 0.875rem;
+    color: var(--text-light);
+    margin: 0;
+}
+
 /* Preferences Toggle */
 .preferences-section {
     width: 100%;
@@ -819,6 +858,29 @@ body {
     color: white;
 }
 
+/* Currency Selector */
+.currency-selector {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.currency-selector label {
+    font-size: 0.875rem;
+    color: var(--text-light);
+}
+
+.currency-selector select {
+    padding: 8px 12px;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    background: var(--background);
+    color: var(--text);
+    font-size: 0.875rem;
+    cursor: pointer;
+}
+
 /* Results */
 .results-container {
     display: flex;
@@ -1086,6 +1148,25 @@ body {
 .accom-price {
     font-weight: 700;
     color: var(--primary);
+}
+
+/* Notes Textarea */
+.notes-textarea {
+    width: 100%;
+    min-height: 80px;
+    padding: 12px;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 0.9rem;
+    resize: vertical;
+    background: var(--background);
+    color: var(--text);
+}
+
+.notes-textarea:focus {
+    outline: none;
+    border-color: var(--primary);
 }
 
 .detail-comparison {
